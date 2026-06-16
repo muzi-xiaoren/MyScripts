@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GitHub PR Tab — Compact Number + Status Color
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      3.6.0
+// @version      3.7.0
 // @description  Show the PR/Issue number in the browser tab (compact) and color the favicon by status (CI failure, review/merge, draft, open).
 // @author       muzi-xiaoren
 // @match        https://github.com/*
@@ -173,15 +173,13 @@
     setTimeout(() => { scheduled = false; update(); }, 200);
   }
 
-  // 合并框是 React 在 document-end 之后才渲染的。用几次“绝对定时”重查兜底：
-  // 这些定时器不会被 mutation 重置，后台标签里即便被节流也照样触发，
-  // 所以金 / 红能在几秒内出现，而不必等鼠标点进标签。
-  function burst() {
-    [300, 800, 1500, 3000, 5000, 8000].forEach(t => setTimeout(update, t));
-  }
-
+  // 心跳兜底：每秒重新判色并重新抢占图标。比有限次定时更可靠——
+  //   ① 后台从未点开的标签里，React 可能很晚才渲染状态徽章，心跳会一直等到它出现；
+  //   ② GitHub 任何时刻（导航/通知）把 favicon 顶回 octocat，最多 1 秒就被夺回。
+  // 后台被浏览器节流时心跳会降到 ~1 秒/次甚至更慢，但仍持续生效；
+  // 非 PR 页 update() 会在 getNumber() 处提前返回，几乎零开销。
   update();
-  burst();
+  setInterval(update, 1000);
 
   // 监听 <head>：捕获标题文字变化，以及 GitHub 整体替换 <title> 节点的情况
   // （只盯单个 title 节点时，节点被替换后旧观察器就失效 → 标题会被改回去）
@@ -197,8 +195,8 @@
   // 切回前台标签时再校正一次（后台被节流时的最终兜底）
   document.addEventListener('visibilitychange', () => { if (!document.hidden) update(); });
 
-  // 翻页（SPA 导航）时放弃旧颜色、重跑并重新轮询（若新页不是 PR 就把图标还给 GitHub）
+  // 翻页（SPA 导航）时放弃旧颜色、重跑（若新页不是 PR 就把图标还给 GitHub；心跳照常兜底）
   ['turbo:load', 'pjax:end'].forEach(ev =>
-    document.addEventListener(ev, () => { resetFavicon(); update(); burst(); })
+    document.addEventListener(ev, () => { resetFavicon(); update(); })
   );
 })();
