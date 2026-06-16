@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GitHub PR Tab — Compact Number + Status Color
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      3.7.0
+// @version      3.8.0
 // @description  Show the PR/Issue number in the browser tab (compact) and color the favicon by status (CI failure, review/merge, draft, open).
 // @author       muzi-xiaoren
 // @match        https://github.com/*
@@ -93,17 +93,13 @@
     return null;
   }
 
-  // 生成某颜色圆形的 png（dataURL）
+  // 生成某颜色圆形的 svg（dataURL）。
+  // 用 SVG 而非 PNG：Chrome 在多个 favicon 候选里更偏好 image/svg+xml，GitHub 的状态
+  // 图标（favicon-success.svg 等）也是 svg；若我们用 png，在后台标签的某些时机会被浏览器
+  // 判为次选而显示不出，仍显示 GitHub 的 octocat。改成 svg 后与之同级，再配合删除+心跳即稳压。
   function buildHref(color) {
-    const size = 32;
-    const c = document.createElement('canvas');
-    c.width = c.height = size;
-    const ctx = c.getContext('2d');
-    ctx.beginPath();
-    ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
-    ctx.fillStyle = color;
-    ctx.fill();
-    return c.toDataURL('image/png');
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="${color}"/></svg>`;
+    return 'data:image/svg+xml,' + encodeURIComponent(svg);
   }
 
   // 落实 favicon 并“抢占所有权”：
@@ -119,7 +115,7 @@
     if (!link) {
       link = document.createElement('link');
       link.rel = 'icon';
-      link.type = 'image/png';
+      link.type = 'image/svg+xml';
       link.dataset.mzx = '1';
       document.head.appendChild(link);
     }
