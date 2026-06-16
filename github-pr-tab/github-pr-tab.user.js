@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GitHub PR Tab — Compact Number + Status Color
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      3.1.0
-// @description  Show the PR/Issue number in the browser tab (compact) and color the favicon by status (open/merged/closed/draft).
+// @version      3.2.0
+// @description  Show the PR/Issue number in the browser tab (compact) and color the favicon by status (CI failure, review/merge, draft, open).
 // @author       muzi-xiaoren
 // @match        https://github.com/*
 // @run-at       document-end
@@ -17,34 +17,75 @@
 (function () {
   'use strict';
 
-  // 状态 -> 颜色（GitHub 官方配色）
+  // favicon 颜色
   const COLORS = {
-    open:   '#1f883d', // 绿
-    merged: '#8250df', // 紫
-    closed: '#cf222e', // 红
-    draft:  '#6e7781', // 灰
+    green:  '#1f883d', // open（基础色）
+    black:  '#000000', // draft（基础色）
+    red:    '#cf222e', // CI 有失败 / closed
+    gold:   '#d4a017', // 有人 approve 或 merge 不再被 block
+    purple: '#8250df', // merged
   };
 
-  let lastState = null;
+  let lastColorKey = null;
+  let bodyTimer = null;
 
   function getNumber() {
     const m = location.pathname.match(/\/(pull|issues)\/(\d+)/);
     return m ? m[2] : null;
   }
 
+  // PR 状态：从头部 StateLabel 的 octicon 判断（新版 UI，语言无关）
   function getState() {
-    const el = document.querySelector('.State, [class*="State--"]');
-    if (!el) return null;
-    const cls = el.className || '';
-    if (/State--merged/.test(cls)) return 'merged';
-    if (/State--draft/.test(cls))  return 'draft';
-    if (/State--closed/.test(cls)) return 'closed';
-    if (/State--open/.test(cls))   return 'open';
-    const t = (el.textContent || '').toLowerCase();
-    if (t.includes('merged')) return 'merged';
-    if (t.includes('draft'))  return 'draft';
-    if (t.includes('closed')) return 'closed';
-    if (t.includes('open'))   return 'open';
+    const label = document.querySelector('[class*="StateLabel"]');
+    if (label) {
+      const oc = (label.querySelector('svg.octicon') || {}).classList?.value || '';
+      if (/git-pull-request-draft/.test(oc))  return 'draft';
+      if (/git-merge/.test(oc))               return 'merged';
+      if (/git-pull-request-closed/.test(oc)) return 'closed';
+      if (/git-pull-request/.test(oc))        return 'open';
+      const t = label.textContent.trim().toLowerCase();
+      if (t.includes('draft'))  return 'draft';
+      if (t.includes('merged')) return 'merged';
+      if (t.includes('closed')) return 'closed';
+      if (t.includes('open'))   return 'open';
+    }
+    // 旧版兜底
+    const old = document.querySelector('.State, [class*="State--"]');
+    if (old) {
+      const c = old.className || '';
+      if (/merged/i.test(c)) return 'merged';
+      if (/draft/i.test(c))  return 'draft';
+      if (/closed/i.test(c)) return 'closed';
+      if (/open/i.test(c))   return 'open';
+    }
+    return null;
+  }
+
+  // 合并框（仅 PR 会话页 /pull/N 存在；其它子页读不到 CI/审查状态）
+  function getMergeBox() {
+    return document.querySelector('[data-testid="mergebox-partial"]')
+        || document.querySelector('[data-testid="mergebox-border-container"]');
+  }
+
+  // 综合判定 favicon 颜色（优先级：merged > closed > CI失败 > approve/未block > draft > open）
+  function getColorKey() {
+    const state = getState();
+    if (state === 'merged') return 'purple';
+    if (state === 'closed') return 'red';
+
+    const box = getMergeBox();
+    if (box) {
+      const text = box.textContent || '';
+      // CI 有失败的检查 -> 红（覆盖 open / draft）
+      if (/were not successful|checks? have failed|\d+\s*failing/i.test(text)) return 'red';
+      // 有人 approve，或 merge 不再被 block -> 金
+      const approved = /changes approved|approved these changes/i.test(text);
+      const blocked  = /merging is blocked/i.test(text);
+      if (approved || !blocked) return 'gold';
+    }
+
+    if (state === 'draft') return 'black';
+    if (state === 'open')  return 'green';
     return null;
   }
 
@@ -83,40 +124,36 @@
 
     if (document.title !== desired) document.title = desired;
 
-    // 2) favicon 上色（状态变了才重画）
-    const state = getState();
-    if (state && COLORS[state] && state !== lastState) {
-      setFavicon(COLORS[state]);
-      lastState = state;
+    // 2) favicon 上色（颜色变了才重画）
+    const key = getColorKey();
+    if (key && COLORS[key] && key !== lastColorKey) {
+      setFavicon(COLORS[key]);
+      lastColorKey = key;
     }
   }
 
-  // 状态徽章可能异步加载，带重试
-  function run(tries = 15) {
-    update();
-    if (getNumber() && lastState === null && tries > 0) {
-      setTimeout(() => run(tries - 1), 200);
-    }
-  }
+  update();
 
-  run();
-
-  // 监听整个 <head>：不仅捕获 <title> 文字变化，还能捕获 GitHub（Turbo 导航 /
-  // 通知角标）把整个 <title> 节点替换掉的情况——这正是标题过一会儿被改回去的原因。
-  // 只盯单个 title 节点时，节点一旦被替换，旧观察器就失效了。
+  // 监听 <head>：捕获标题文字变化，以及 GitHub 整体替换 <title> 节点的情况
+  // （只盯单个 title 节点时，节点被替换后旧观察器就失效 → 标题会被改回去）
   new MutationObserver(update).observe(document.head, {
     childList: true,
     subtree: true,
     characterData: true,
   });
 
-  // 切回前台标签时再确认一次（后台标签被 GitHub 改标题的兜底）
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) update();
-  });
+  // 监听 <body>：合并框 / 状态徽章是异步加载、且会随 CI 与审查实时变化的，
+  // 节流后重新判定 favicon 颜色（加 class / 改 favicon 不动 body，不会自触发）。
+  new MutationObserver(() => {
+    clearTimeout(bodyTimer);
+    bodyTimer = setTimeout(update, 500);
+  }).observe(document.body, { childList: true, subtree: true });
 
-  // 翻页时重置状态并重跑
+  // 切回前台标签时再校正一次
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) update(); });
+
+  // 翻页（SPA 导航）时重置颜色并重跑
   ['turbo:load', 'pjax:end'].forEach(ev =>
-    document.addEventListener(ev, () => { lastState = null; run(); })
+    document.addEventListener(ev, () => { lastColorKey = null; update(); })
   );
 })();
