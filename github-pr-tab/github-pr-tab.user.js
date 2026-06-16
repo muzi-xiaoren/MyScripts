@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GitHub PR Tab — Compact Number + Status Color
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      3.2.0
+// @version      3.3.0
 // @description  Show the PR/Issue number in the browser tab (compact) and color the favicon by status (CI failure, review/merge, draft, open).
 // @author       muzi-xiaoren
 // @match        https://github.com/*
@@ -78,10 +78,13 @@
       const text = box.textContent || '';
       // CI 有失败的检查 -> 红（覆盖 open / draft）
       if (/were not successful|checks? have failed|\d+\s*failing/i.test(text)) return 'red';
-      // 有人 approve，或 merge 不再被 block -> 金
-      const approved = /changes approved|approved these changes/i.test(text);
-      const blocked  = /merging is blocked/i.test(text);
-      if (approved || !blocked) return 'gold';
+      // 金色：必须有"明确正向信号"（有人 approve / 能合 / 无冲突），且没有 blocked。
+      // 不再用"没有 blocked 文字"来推断金色——否则合并框加载到一半、blocked
+      // 文字还没渲染时会先闪一下金再变回绿（这就是之前看到的"出错/闪烁"）。
+      const blocked   = /merging is blocked/i.test(text);
+      const approved  = /changes approved|approved these changes/i.test(text);
+      const mergeable = /merging can be performed|no conflicts with base branch/i.test(text);
+      if (!blocked && (approved || mergeable)) return 'gold';
     }
 
     if (state === 'draft') return 'black';
@@ -146,7 +149,7 @@
   // 节流后重新判定 favicon 颜色（加 class / 改 favicon 不动 body，不会自触发）。
   new MutationObserver(() => {
     clearTimeout(bodyTimer);
-    bodyTimer = setTimeout(update, 500);
+    bodyTimer = setTimeout(update, 150);
   }).observe(document.body, { childList: true, subtree: true });
 
   // 切回前台标签时再校正一次
