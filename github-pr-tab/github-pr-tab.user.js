@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GitHub PR Tab — Compact Number + Status Color
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      3.0.0
+// @version      3.1.0
 // @description  Show the PR/Issue number in the browser tab (compact) and color the favicon by status (open/merged/closed/draft).
 // @author       muzi-xiaoren
 // @match        https://github.com/*
@@ -101,9 +101,19 @@
 
   run();
 
-  // 标题变化（SPA 导航）
-  const titleEl = document.querySelector('title');
-  if (titleEl) new MutationObserver(update).observe(titleEl, { childList: true });
+  // 监听整个 <head>：不仅捕获 <title> 文字变化，还能捕获 GitHub（Turbo 导航 /
+  // 通知角标）把整个 <title> 节点替换掉的情况——这正是标题过一会儿被改回去的原因。
+  // 只盯单个 title 节点时，节点一旦被替换，旧观察器就失效了。
+  new MutationObserver(update).observe(document.head, {
+    childList: true,
+    subtree: true,
+    characterData: true,
+  });
+
+  // 切回前台标签时再确认一次（后台标签被 GitHub 改标题的兜底）
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) update();
+  });
 
   // 翻页时重置状态并重跑
   ['turbo:load', 'pjax:end'].forEach(ev =>
