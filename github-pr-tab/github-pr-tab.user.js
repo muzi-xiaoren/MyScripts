@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GitHub PR Tab — Compact Number + Status Color
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      3.3.0
+// @version      3.4.0
 // @description  Show the PR/Issue number in the browser tab (compact) and color the favicon by status (CI failure, review/merge, draft, open).
 // @author       muzi-xiaoren
 // @match        https://github.com/*
@@ -26,7 +26,8 @@
     purple: '#8250df', // merged
   };
 
-  let lastColorKey = null;
+  let desiredColor = null;   // 当前目标颜色（hex）
+  let desiredHref = null;    // 该颜色的 png dataURL（缓存；颜色不变就不重画 canvas）
   let bodyTimer = null;
 
   function getNumber() {
@@ -92,7 +93,8 @@
     return null;
   }
 
-  function setFavicon(color) {
+  // 生成某颜色圆形的 png（dataURL）
+  function buildHref(color) {
     const size = 32;
     const c = document.createElement('canvas');
     c.width = c.height = size;
@@ -101,15 +103,35 @@
     ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
     ctx.fillStyle = color;
     ctx.fill();
+    return c.toDataURL('image/png');
+  }
 
-    let link = document.querySelector('link[rel~="icon"]');
+  // 落实 favicon 并“抢占所有权”：
+  // GitHub 是 SPA，导航/收到通知时会重新插入自己的 <link rel=icon>（含浏览器更偏好的 svg 版），
+  // 把我们的图标顶掉——表现就是“先变色、过一会儿又变回 GitHub 图标”。
+  // 所以每次都重新断言：删掉所有不是自己的 icon link，只留自己的那一个。
+  function applyFavicon() {
+    if (!desiredHref) return;
+    document.querySelectorAll('link[rel~="icon"]').forEach(l => {
+      if (l.dataset.mzx !== '1') l.remove();
+    });
+    let link = document.querySelector('link[data-mzx="1"]');
     if (!link) {
       link = document.createElement('link');
       link.rel = 'icon';
+      link.type = 'image/png';
+      link.dataset.mzx = '1';
       document.head.appendChild(link);
     }
-    link.type = 'image/png';
-    link.href = c.toDataURL('image/png');
+    if (link.href !== desiredHref) link.href = desiredHref;
+  }
+
+  // 离开 PR 页时放弃所有权，把 favicon 还给 GitHub
+  function resetFavicon() {
+    desiredColor = null;
+    desiredHref = null;
+    const mine = document.querySelector('link[data-mzx="1"]');
+    if (mine) mine.remove();
   }
 
   function update() {
@@ -127,11 +149,14 @@
 
     if (document.title !== desired) document.title = desired;
 
-    // 2) favicon 上色（颜色变了才重画）
+    // 2) favicon 上色：颜色变了才重画 canvas，但每次都重新断言所有权（防止被 GitHub 顶回去）
     const key = getColorKey();
-    if (key && COLORS[key] && key !== lastColorKey) {
-      setFavicon(COLORS[key]);
-      lastColorKey = key;
+    if (key && COLORS[key]) {
+      if (COLORS[key] !== desiredColor) {
+        desiredColor = COLORS[key];
+        desiredHref = buildHref(desiredColor);
+      }
+      applyFavicon();
     }
   }
 
@@ -155,8 +180,8 @@
   // 切回前台标签时再校正一次
   document.addEventListener('visibilitychange', () => { if (!document.hidden) update(); });
 
-  // 翻页（SPA 导航）时重置颜色并重跑
+  // 翻页（SPA 导航）时放弃旧颜色并重跑（若新页不是 PR 就把图标还给 GitHub）
   ['turbo:load', 'pjax:end'].forEach(ev =>
-    document.addEventListener(ev, () => { lastColorKey = null; update(); })
+    document.addEventListener(ev, () => { resetFavicon(); update(); })
   );
 })();
