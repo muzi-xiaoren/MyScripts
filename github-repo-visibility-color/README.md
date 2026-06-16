@@ -1,3 +1,5 @@
+中文 · [English](README.en.md)
+
 # GitHub Repo Visibility Badge Colors
 
 给 GitHub 个人主页 / 仓库列表里的**可见性徽章**上色：

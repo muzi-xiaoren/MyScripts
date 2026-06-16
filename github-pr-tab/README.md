@@ -1,3 +1,5 @@
+中文 · [English](README.en.md)
+
 # GitHub PR Tab — Compact Number + Status Color
 
 让 GitHub 的 PR / Issue 在浏览器**标签页**上更好认：

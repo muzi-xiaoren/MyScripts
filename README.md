@@ -1,3 +1,5 @@
+中文 · [English](README.en.md)
+
 # MyScripts
 
 我的 [Tampermonkey](https://www.tampermonkey.net/) / 油猴用户脚本合集。
@@ -16,6 +18,8 @@
 1. 给浏览器（Chrome / Edge / Firefox 通用）安装 [Tampermonkey](https://www.tampermonkey.net/) 或开源的 [Violentmonkey](https://violentmonkey.github.io/) 扩展。
 2. 点击上表中对应脚本的 **安装** 链接（`.user.js` 结尾），Tampermonkey 会自动弹出安装界面。
 3. 点 **安装 / Install** 即可。之后访问匹配的页面会自动生效。
+
+> **Edge / Chrome（Manifest V3）注意**：脚本显示「已启用」却不生效时，去 `edge://extensions`（或 `chrome://extensions`）打开 Tampermonkey 的详情页，开启 **“允许用户脚本 / Allow user scripts”** 开关（或打开右上角的开发者模式），然后刷新页面。
 
 > 已安装过的脚本，Tampermonkey 会根据脚本头部的 `@updateURL` 自动检查更新。
 
