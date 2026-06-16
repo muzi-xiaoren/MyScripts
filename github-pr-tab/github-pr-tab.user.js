@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GitHub PR Tab — Compact Number + Status Color
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      3.5.0
+// @version      3.6.0
 // @description  Show the PR/Issue number in the browser tab (compact) and color the favicon by status (CI failure, review/merge, draft, open).
 // @author       muzi-xiaoren
 // @match        https://github.com/*
@@ -149,15 +149,19 @@
 
     if (document.title !== desired) document.title = desired;
 
-    // 2) favicon 上色：颜色变了才重画 canvas，但每次都重新断言所有权（防止被 GitHub 顶回去）
+    // 2) favicon 上色：换色与“抢占所有权”解耦。
+    //    - 只在拿到“新的有效颜色”时才重画 canvas；
+    //    - 但只要曾确定过颜色（desiredHref 非空），就每次都无条件重新断言所有权，
+    //      即使此刻 getColorKey 临时返回 null（导航/水合途中 StateLabel 或合并框
+    //      短暂消失）也绝不把图标让回 GitHub。
+    //    这正是各种颜色“偶尔变回 octocat”的根因：旧版把 applyFavicon 锁在 key 有效
+    //    的分支里，key 一旦临时为 null 就停止断言，octocat 便趁机顶上来并卡住。
     const key = getColorKey();
-    if (key && COLORS[key]) {
-      if (COLORS[key] !== desiredColor) {
-        desiredColor = COLORS[key];
-        desiredHref = buildHref(desiredColor);
-      }
-      applyFavicon();
+    if (key && COLORS[key] && COLORS[key] !== desiredColor) {
+      desiredColor = COLORS[key];
+      desiredHref = buildHref(desiredColor);
     }
+    applyFavicon();
   }
 
   // 一轮 mutation 只调度一次 update，且不被后续 mutation 清除——
