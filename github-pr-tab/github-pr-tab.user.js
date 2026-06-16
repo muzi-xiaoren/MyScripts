@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GitHub PR Tab — Compact Number + Status Color
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      3.4.0
+// @version      3.5.0
 // @description  Show the PR/Issue number in the browser tab (compact) and color the favicon by status (CI failure, review/merge, draft, open).
 // @author       muzi-xiaoren
 // @match        https://github.com/*
@@ -28,7 +28,7 @@
 
   let desiredColor = null;   // 当前目标颜色（hex）
   let desiredHref = null;    // 该颜色的 png dataURL（缓存；颜色不变就不重画 canvas）
-  let bodyTimer = null;
+  let scheduled = false;
 
   function getNumber() {
     const m = location.pathname.match(/\/(pull|issues)\/(\d+)/);
@@ -160,7 +160,24 @@
     }
   }
 
+  // 一轮 mutation 只调度一次 update，且不被后续 mutation 清除——
+  // 旧的 clearTimeout 防抖会被 GitHub 持续的 mutation（水合 / fragment 陆续加载）
+  // 不停重置而“饿死”，在后台标签里尤其明显（setTimeout 还被浏览器节流）。
+  function scheduleUpdate() {
+    if (scheduled) return;
+    scheduled = true;
+    setTimeout(() => { scheduled = false; update(); }, 200);
+  }
+
+  // 合并框是 React 在 document-end 之后才渲染的。用几次“绝对定时”重查兜底：
+  // 这些定时器不会被 mutation 重置，后台标签里即便被节流也照样触发，
+  // 所以金 / 红能在几秒内出现，而不必等鼠标点进标签。
+  function burst() {
+    [300, 800, 1500, 3000, 5000, 8000].forEach(t => setTimeout(update, t));
+  }
+
   update();
+  burst();
 
   // 监听 <head>：捕获标题文字变化，以及 GitHub 整体替换 <title> 节点的情况
   // （只盯单个 title 节点时，节点被替换后旧观察器就失效 → 标题会被改回去）
@@ -170,18 +187,14 @@
     characterData: true,
   });
 
-  // 监听 <body>：合并框 / 状态徽章是异步加载、且会随 CI 与审查实时变化的，
-  // 节流后重新判定 favicon 颜色（加 class / 改 favicon 不动 body，不会自触发）。
-  new MutationObserver(() => {
-    clearTimeout(bodyTimer);
-    bodyTimer = setTimeout(update, 150);
-  }).observe(document.body, { childList: true, subtree: true });
+  // 监听 <body>：合并框 / 状态徽章异步加载、且随 CI 与审查实时变化
+  new MutationObserver(scheduleUpdate).observe(document.body, { childList: true, subtree: true });
 
-  // 切回前台标签时再校正一次
+  // 切回前台标签时再校正一次（后台被节流时的最终兜底）
   document.addEventListener('visibilitychange', () => { if (!document.hidden) update(); });
 
-  // 翻页（SPA 导航）时放弃旧颜色并重跑（若新页不是 PR 就把图标还给 GitHub）
+  // 翻页（SPA 导航）时放弃旧颜色、重跑并重新轮询（若新页不是 PR 就把图标还给 GitHub）
   ['turbo:load', 'pjax:end'].forEach(ev =>
-    document.addEventListener(ev, () => { resetFavicon(); update(); })
+    document.addEventListener(ev, () => { resetFavicon(); update(); burst(); })
   );
 })();
