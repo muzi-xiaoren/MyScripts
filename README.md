@@ -8,14 +8,17 @@
 
 ## 脚本列表
 
-| 脚本 | 说明 | 安装 |
-|---|---|---|
-| [github-pr-tab](./github-pr-tab) | GitHub PR/Issue 页面：浏览器标签只显示 `#编号`，并按状态给图标(favicon)上色 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/github-pr-tab/github-pr-tab.user.js) |
-| [github-repo-visibility-color](./github-repo-visibility-color) | GitHub 个人主页/仓库列表：`Public` 徽章变绿、`Private` 变蓝（描边样式，与原生 “Public archive” 一致） | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/github-repo-visibility-color/github-repo-visibility-color.user.js) |
-| [pt-checkin-pterclub](./pt-checkin-pterclub) | PTerClub：打开页面时自动检测并完成每日签到，未签到则签到后回到种子页并刷新，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-pterclub/pt-checkin-pterclub.user.js) |
-| [pt-checkin-mua](./pt-checkin-mua) | mua：打开页面时自动检测并完成每日签到，未签到则签到后回到 `special.php` 并刷新，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-mua/pt-checkin-mua.user.js) |
-| [pt-checkin-kamept](./pt-checkin-kamept) | KamePT：打开页面时自动检测并完成每日签到，未签到则签到后回到 `torrents.php?tag_id=10` 并刷新，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-kamept/pt-checkin-kamept.user.js) |
-| [pt-checkin-qingwapt](./pt-checkin-qingwapt) | QingwaPT(青蛙)：打开主页时领每日福利 + （可选）群聊发言 + 签到，已签到则不动；群聊开关可一键关闭 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-qingwapt/pt-checkin-qingwapt.user.js) |
+| 脚本 | 版⁠本 | 说明 | 安⁠装 |
+|---|---|---|---|
+| [github-pr-tab](./github-pr-tab) | 3.8.0 | GitHub PR/Issue 页面：浏览器标签只显示 `#编号`，并按状态给图标(favicon)上色 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/github-pr-tab/github-pr-tab.user.js) |
+| [github-repo-visibility-color](./github-repo-visibility-color) | 1.0.0 | GitHub 个人主页/仓库列表：`Public` 徽章变绿、`Private` 变蓝（描边样式，与原生 “Public archive” 一致） | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/github-repo-visibility-color/github-repo-visibility-color.user.js) |
+| [pt-checkin-pterclub](./pt-checkin-pterclub) | 1.2.0 | PTerClub：打开页面时自动检测并完成每日签到，未签到则签到后回到种子页并刷新，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-pterclub/pt-checkin-pterclub.user.js) |
+| [pt-checkin-mua](./pt-checkin-mua) | 1.1.0 | mua：打开页面时自动检测并完成每日签到，未签到则签到后回到 `special.php` 并刷新，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-mua/pt-checkin-mua.user.js) |
+| [pt-checkin-kamept](./pt-checkin-kamept) | 1.1.0 | KamePT：打开页面时自动检测并完成每日签到，未签到则签到后回到 `torrents.php?tag_id=10` 并刷新，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-kamept/pt-checkin-kamept.user.js) |
+| [pt-checkin-qingwapt](./pt-checkin-qingwapt) | 1.1.0 | QingwaPT(青蛙)：打开主页时领每日福利 + （可选）群聊发言 + 签到，已签到则不动；群聊开关可一键关闭 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-qingwapt/pt-checkin-qingwapt.user.js) |
+| [pt-checkin-nicept](./pt-checkin-nicept) | 1.0.0 | NicePT：打开页面时自动检测并完成每日签到，未签到则签到后回到 `torrents.php` 并刷新，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-nicept/pt-checkin-nicept.user.js) |
+| [pt-checkin-pttime](./pt-checkin-pttime) | 1.0.0 | PTtime：打开页面时自动检测并完成每日签到，未签到则签到后回到指定成种页并刷新，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-pttime/pt-checkin-pttime.user.js) |
+| [pt-checkin-gamegamept](./pt-checkin-gamegamept) | 1.0.0 | GGPT(GameGamePT)：打开页面时自动检测并完成每日签到，未签到则签到后原地刷新，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-gamegamept/pt-checkin-gamegamept.user.js) |
 
 ## 如何安装脚本
 
