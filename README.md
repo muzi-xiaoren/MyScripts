@@ -15,6 +15,7 @@
 | [pt-checkin-pterclub](./pt-checkin-pterclub) | PTerClub：打开页面时自动检测并完成每日签到，未签到则签到后回到种子页并刷新，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-pterclub/pt-checkin-pterclub.user.js) |
 | [pt-checkin-mua](./pt-checkin-mua) | mua：打开页面时自动检测并完成每日签到，未签到则签到后回到 `special.php` 并刷新，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-mua/pt-checkin-mua.user.js) |
 | [pt-checkin-kamept](./pt-checkin-kamept) | KamePT：打开页面时自动检测并完成每日签到，未签到则签到后回到 `torrents.php?tag_id=10` 并刷新，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-kamept/pt-checkin-kamept.user.js) |
+| [pt-checkin-qingwapt](./pt-checkin-qingwapt) | QingwaPT(青蛙)：打开主页时领每日福利 + （可选）群聊发言 + 签到，已签到则不动；群聊开关可一键关闭 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-qingwapt/pt-checkin-qingwapt.user.js) |
 
 ## 如何安装脚本
 

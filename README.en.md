@@ -15,6 +15,7 @@ Each script lives in its own folder with its own README.
 | [pt-checkin-pterclub](./pt-checkin-pterclub) | PTerClub: on page open, auto-detect and do the daily check-in — if pending, check in then return to the torrents page and reload; do nothing if already done | [Install](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-pterclub/pt-checkin-pterclub.user.js) |
 | [pt-checkin-mua](./pt-checkin-mua) | mua: on page open, auto-detect and do the daily check-in — if pending, check in then return to `special.php` and reload; do nothing if already done | [Install](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-mua/pt-checkin-mua.user.js) |
 | [pt-checkin-kamept](./pt-checkin-kamept) | KamePT: on page open, auto-detect and do the daily check-in — if pending, check in then return to `torrents.php?tag_id=10` and reload; do nothing if already done | [Install](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-kamept/pt-checkin-kamept.user.js) |
+| [pt-checkin-qingwapt](./pt-checkin-qingwapt) | QingwaPT: on homepage open, claim the daily gift + (optional) shoutbox post + check in; does nothing if already checked in; the shoutbox post is one toggle away from off | [Install](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-qingwapt/pt-checkin-qingwapt.user.js) |
 
 ## How to install
 
