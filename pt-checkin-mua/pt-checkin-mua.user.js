@@ -1,16 +1,16 @@
 // ==UserScript==
-// @name         PT 签到 · PTerClub
+// @name         PT 签到 · Mua
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      1.1.0
-// @description  打开 PTerClub 时自动检测签到状态：未签到就签到并回到指定页面，已签到则什么都不做。
+// @version      1.0.0
+// @description  打开 mua.xloli.cc 时自动检测签到状态：未签到就签到并回到指定页面，已签到则什么都不做。
 // @author       muzi-xiaoren
-// @match        https://pterclub.net/*
+// @match        https://mua.xloli.cc/*
 // @run-at       document-end
 // @grant        none
 // @homepageURL  https://github.com/muzi-xiaoren/MyScripts
 // @supportURL   https://github.com/muzi-xiaoren/MyScripts/issues
-// @downloadURL  https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-pterclub/pt-checkin-pterclub.user.js
-// @updateURL    https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-pterclub/pt-checkin-pterclub.user.js
+// @downloadURL  https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-mua/pt-checkin-mua.user.js
+// @updateURL    https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-mua/pt-checkin-mua.user.js
 // @license      MIT
 // ==/UserScript==
 
@@ -18,7 +18,7 @@
   'use strict';
 
   // 【配置】签到成功后停留 / 跳转到的页面。留空 '' 则只刷新触发签到的当前页。
-  const RETURN_TO = 'https://pterclub.net/torrents.php?cat=403';
+  const RETURN_TO = 'https://mua.xloli.cc/special.php';
 
   // NexusPHP 有两种签到入口：
   //   ① AJAX 变体（如 PTerClub）：未签 <a id="do-attendance" data-url="attendance-ajax.php">；已签后该节点消失。
