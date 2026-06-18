@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PT 签到 · Mua
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      1.0.0
+// @version      1.1.0
 // @description  打开 mua.xloli.cc 时自动检测签到状态：未签到就签到并回到指定页面，已签到则什么都不做。
 // @author       muzi-xiaoren
 // @match        https://mua.xloli.cc/*
@@ -19,6 +19,30 @@
 
   // 【配置】签到成功后停留 / 跳转到的页面。留空 '' 则只刷新触发签到的当前页。
   const RETURN_TO = 'https://mua.xloli.cc/special.php';
+  // 网络抗抖：单次请求超时(毫秒) + 失败最多重试次数（线性退避）。
+  const FETCH_TIMEOUT = 8000;
+  const FETCH_TRIES = 3;
+
+  // 带超时 + 自动重试的 fetch：单次超 FETCH_TIMEOUT 毫秒就中断重发，最多 FETCH_TRIES 次。
+  // 网络卡顿时更稳；若全部失败，则交给「下次打开页面」的被动重试兜底（本次不写已完成标记）。
+  async function tryFetch(url, opts) {
+    let lastErr;
+    for (let i = 1; i <= FETCH_TRIES; i++) {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT);
+      try {
+        const r = await fetch(url, Object.assign({ credentials: 'same-origin' }, opts, { signal: ctrl.signal }));
+        clearTimeout(timer);
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r;
+      } catch (e) {
+        clearTimeout(timer);
+        lastErr = e;
+        if (i < FETCH_TRIES) await new Promise((s) => setTimeout(s, 800 * i));
+      }
+    }
+    throw lastErr;
+  }
 
   // NexusPHP 有两种签到入口：
   //   ① AJAX 变体（如 PTerClub）：未签 <a id="do-attendance" data-url="attendance-ajax.php">；已签后该节点消失。
@@ -37,12 +61,10 @@
   const today = new Date().toLocaleDateString('en-CA');
   if (localStorage.getItem('mzx-pter-attendance') === today) return;
 
-  // 签到 = 对入口发一个带 cookie 的请求（AJAX 变体回 JSON，经典变体回 HTML；都只看 HTTP 是否 200）。
-  // 成功后：已在 RETURN_TO 页就原地刷新，否则跳到 RETURN_TO（跳转本身即一次新加载）。
-  // 仅网络 / HTTP 出错时不动，留到下次再试。
-  fetch(endpoint, { credentials: 'same-origin' })
-    .then((r) => {
-      if (!r.ok) throw new Error('HTTP ' + r.status);
+  // 签到（带超时 + 重试）。成功后标记今天已完成并回到 RETURN_TO（已在该页就原地刷新）；
+  // 重试仍全失败则不标记，下次打开页面再试。
+  tryFetch(endpoint)
+    .then(() => {
       localStorage.setItem('mzx-pter-attendance', today);
       const here = location.href.replace(/#.*$/, '');
       if (RETURN_TO && here !== RETURN_TO) {
@@ -52,6 +74,6 @@
       }
     })
     .catch(() => {
-      /* 网络异常：不写标记、不跳、不刷，下次打开页面再试 */
+      /* 重试后仍失败：不写标记、不跳、不刷，下次打开页面再试 */
     });
 })();
