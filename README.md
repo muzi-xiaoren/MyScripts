@@ -22,6 +22,10 @@
 | [pt-checkin-carpt](./pt-checkin-carpt) | 1.0.0 | CarPT：打开页面时自动检测并完成每日签到，未签到则签到后回到 `torrents.php` 并刷新，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-carpt/pt-checkin-carpt.user.js) |
 | [pt-checkin-btschool](./pt-checkin-btschool) | 1.0.0 | BTSchool(比特校园)：打开页面时自动完成每日签到（BTSchool 的 `index.php?action=addbonus` 插件），未签到则签到后回到 `torrents.php` 并刷新，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-btschool/pt-checkin-btschool.user.js) |
 | [pt-checkin-rousi](./pt-checkin-rousi) | 1.0.0 | Rousi(自研 React 站)：打开页面时模拟点击签到按钮，未签到则签到后回到指定列表页并刷新，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-rousi/pt-checkin-rousi.user.js) |
+| [pt-checkin-dubhe](./pt-checkin-dubhe) | 1.0.0 | Dubhe(天枢)：打开页面时自动检测并完成每日签到，未签到则签到后回到 `torrents.php?tag_id=3` 并刷新，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-dubhe/pt-checkin-dubhe.user.js) |
+| [pt-checkin-cspt](./pt-checkin-cspt) | 1.0.0 | CSPT(财神)：打开页面时自动检测并完成每日签到（`not-attended` 图标变体），未签到则签到后回到 `torrents.php` 并刷新，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-cspt/pt-checkin-cspt.user.js) |
+| [pt-checkin-hdfans](./pt-checkin-hdfans) | 1.0.0 | HDFans：打开页面时自动检测并完成每日签到，未签到则签到后回到 `torrents.php` 并刷新，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-hdfans/pt-checkin-hdfans.user.js) |
+| [pt-checkin-bitporn](./pt-checkin-bitporn) | 1.0.0 | BitPorn(UNIT3D)：打开页面时自动领取当月「Daily Reward」日历里今天的奖励（事件 id 按月自动 +1），领完回到 `/trending`，已领则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-bitporn/pt-checkin-bitporn.user.js) |
 
 ## 如何安装脚本
 
