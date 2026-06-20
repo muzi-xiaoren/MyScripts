@@ -19,6 +19,9 @@
 | [pt-checkin-nicept](./pt-checkin-nicept) | 1.0.0 | NicePT：打开页面时自动检测并完成每日签到，未签到则签到后回到 `torrents.php` 并刷新，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-nicept/pt-checkin-nicept.user.js) |
 | [pt-checkin-pttime](./pt-checkin-pttime) | 1.0.0 | PTtime：打开页面时自动检测并完成每日签到，未签到则签到后回到指定成种页并刷新，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-pttime/pt-checkin-pttime.user.js) |
 | [pt-checkin-gamegamept](./pt-checkin-gamegamept) | 1.0.0 | GGPT(GameGamePT)：打开页面时自动检测并完成每日签到，未签到则签到后原地刷新，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-gamegamept/pt-checkin-gamegamept.user.js) |
+| [pt-checkin-carpt](./pt-checkin-carpt) | 1.0.0 | CarPT：打开页面时自动检测并完成每日签到，未签到则签到后回到 `torrents.php` 并刷新，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-carpt/pt-checkin-carpt.user.js) |
+| [pt-checkin-btschool](./pt-checkin-btschool) | 1.0.0 | BTSchool(比特校园)：打开页面时自动完成每日签到（BTSchool 的 `index.php?action=addbonus` 插件），未签到则签到后回到 `torrents.php` 并刷新，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-btschool/pt-checkin-btschool.user.js) |
+| [pt-checkin-rousi](./pt-checkin-rousi) | 1.0.0 | Rousi(自研 React 站)：打开页面时模拟点击签到按钮，未签到则签到后回到指定列表页并刷新，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-rousi/pt-checkin-rousi.user.js) |
 
 ## 如何安装脚本
 
