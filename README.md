@@ -10,7 +10,7 @@
 
 | 脚本 | 版⁠本 | 说明 | 安⁠装 |
 |---|---|---|---|
-| [github-pr-tab](./github-pr-tab) | 3.8.0 | GitHub PR/Issue 页面：浏览器标签只显示 `#编号`，并按状态给图标(favicon)上色 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/github-pr-tab/github-pr-tab.user.js) |
+| [github-pr-tab](./github-pr-tab) | 3.9.0 | GitHub PR/Issue 页面：浏览器标签只显示 `#编号`，并按状态给图标(favicon)上色（stacked 非主干 base 灰、冲突红等） | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/github-pr-tab/github-pr-tab.user.js) |
 | [github-repo-visibility-color](./github-repo-visibility-color) | 1.0.0 | GitHub 个人主页/仓库列表：`Public` 徽章变绿、`Private` 变蓝（描边样式，与原生 “Public archive” 一致） | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/github-repo-visibility-color/github-repo-visibility-color.user.js) |
 | [pt-checkin-pterclub](./pt-checkin-pterclub) | 1.2.0 | PTerClub：打开页面时自动检测并完成每日签到，未签到则签到后回到种子页并刷新，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-pterclub/pt-checkin-pterclub.user.js) |
 | [pt-checkin-mua](./pt-checkin-mua) | 1.1.0 | mua：打开页面时自动检测并完成每日签到，未签到则签到后回到 `special.php` 并刷新，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-mua/pt-checkin-mua.user.js) |

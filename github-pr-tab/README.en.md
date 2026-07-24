@@ -13,11 +13,15 @@ The favicon color is decided by priority (high → low):
 |---|---|---|
 | 1 | Merged | 🟣 Purple `#8250df` |
 | 2 | Closed (not merged) | 🔴 Red `#cf222e` |
-| 3 | CI has a failed check | 🔴 Red `#cf222e` |
-| 4 | Someone approved, or merge is no longer blocked | 🟡 Gold `#d4a017` |
-| 5 | Draft (none of the above) | ⚫ Black `#000000` |
-| 6 | Open (none of the above) | 🟢 Green `#1f883d` |
+| 3 | Stacked: base is not the trunk (`main`/`master`) but another branch | ⚪ Gray `#6e7781` |
+| 4 | CI has a failed check | 🔴 Red `#cf222e` |
+| 5 | Has conflicts (must be resolved to merge) | 🔴 Red `#cf222e` |
+| 6 | Someone approved, or merge is no longer blocked | 🟡 Gold `#d4a017` |
+| 7 | Draft (none of the above) | ⚫ Black `#000000` |
+| 8 | Open (none of the above) | 🟢 Green `#1f883d` |
 
+> **Gray (stacked) beats red**: a PR stacked on another branch has a "provisional" merge state — it's only truly evaluated once its base lands on the trunk, so its conflicts / CI are ignored for now and it's grayed out as "not my concern yet". Only PRs that actually target the trunk turn red on conflict / CI failure.
+>
 > CI and review/merge status can only be read on the **PR conversation page** (`/pull/N`, where the merge box lives); on Files / Commits sub-tabs only the base color (open/draft/merged/closed) applies.
 >
 > ⚫ Black may be hard to see on a dark tab strip — change `COLORS.black` in the script if so.
@@ -47,10 +51,12 @@ Edit `COLORS` at the top of the script:
 
 ```js
 const COLORS = {
-  open:   '#1f883d',
-  merged: '#8250df',
-  closed: '#cf222e',
-  draft:  '#6e7781',
+  green:  '#1f883d', // Open
+  black:  '#000000', // Draft
+  red:    '#cf222e', // Closed / CI failure / conflict
+  gold:   '#d4a017', // Approved / mergeable
+  purple: '#8250df', // Merged
+  gray:   '#6e7781', // Stacked (base is not the trunk)
 };
 ```
 
