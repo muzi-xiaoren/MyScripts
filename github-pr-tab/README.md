@@ -13,11 +13,15 @@ favicon 颜色按优先级判定（高 → 低）：
 |---|---|---|
 | 1 | Merged（已合并） | 🟣 紫 `#8250df` |
 | 2 | Closed（已关闭未合并） | 🔴 红 `#cf222e` |
-| 3 | CI 有失败的检查 | 🔴 红 `#cf222e` |
-| 4 | 有人 approve，或 merge 不再被 block | 🟡 金 `#d4a017` |
-| 5 | Draft（无上述情况） | ⚫ 黑 `#000000` |
-| 6 | Open（无上述情况） | 🟢 绿 `#1f883d` |
+| 3 | Stacked：base 不是主干（`main`/`master`），而是叠在别的分支上 | ⚪ 灰 `#6e7781` |
+| 4 | CI 有失败的检查 | 🔴 红 `#cf222e` |
+| 5 | 有冲突（需解决才能合） | 🔴 红 `#cf222e` |
+| 6 | 有人 approve，或 merge 不再被 block | 🟡 金 `#d4a017` |
+| 7 | Draft（无上述情况） | ⚫ 黑 `#000000` |
+| 8 | Open（无上述情况） | 🟢 绿 `#1f883d` |
 
+> **灰色（stacked）优先于红色**：叠在别的分支上的 PR，其合并态是「临时」的——等它的 base 合入主干后才真正评估，所以此刻的冲突 / CI 都先不当回事，用灰色标成「暂不关注」。只有真正冲着主干合的 PR，冲突 / CI 失败才会亮红。
+>
 > CI 与审查/合并状态只在 **PR 会话页**（`/pull/N`，合并框所在）能读到；在 Files / Commits 等子页只按 open/draft/merged/closed 上基础色。
 >
 > ⚫ 黑色在深色标签栏上可能不明显——若看不清，把脚本里 `COLORS.black` 改成别的深色即可。
@@ -47,10 +51,12 @@ const desired = `#${number}`;                          // ① 最紧凑：只显
 
 ```js
 const COLORS = {
-  open:   '#1f883d',
-  merged: '#8250df',
-  closed: '#cf222e',
-  draft:  '#6e7781',
+  green:  '#1f883d', // Open
+  black:  '#000000', // Draft
+  red:    '#cf222e', // Closed / CI 失败 / 冲突
+  gold:   '#d4a017', // 已 approve / 可合
+  purple: '#8250df', // Merged
+  gray:   '#6e7781', // Stacked（base 非主干）
 };
 ```
 

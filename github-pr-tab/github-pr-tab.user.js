@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GitHub PR Tab — Compact Number + Status Color
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      3.8.0
-// @description  Show the PR/Issue number in the browser tab (compact) and color the favicon by status (CI failure, review/merge, draft, open).
+// @version      3.9.0
+// @description  Show the PR/Issue number in the browser tab (compact) and color the favicon by status (stacked/non-main base, CI failure, conflict, review/merge, draft, open).
 // @author       muzi-xiaoren
 // @match        https://github.com/*
 // @run-at       document-end
@@ -21,9 +21,10 @@
   const COLORS = {
     green:  '#1f883d', // open（基础色）
     black:  '#000000', // draft（基础色）
-    red:    '#cf222e', // CI 有失败 / closed
+    red:    '#cf222e', // CI 有失败 / 有冲突 / closed
     gold:   '#d4a017', // 有人 approve 或 merge 不再被 block
     purple: '#8250df', // merged
+    gray:   '#6e7781', // stacked：base 不是默认分支（main/master），不是往主干合
   };
 
   let desiredColor = null;   // 当前目标颜色（hex）
@@ -62,23 +63,53 @@
     return null;
   }
 
+  // base 分支名（PR 头部 “…into BASE from HEAD” 的 BASE）。
+  // 新版 React UI：分支摘要块 PullRequestHeaderSummary 里第一个 /tree/ 链接就是 base
+  // （into 一侧先渲染）；读不到就返回 null（如 Files/Commits 子页），不据此判色。
+  function getBaseBranch() {
+    const summary = document.querySelector('[class*="PullRequestHeaderSummary"]');
+    if (summary) {
+      const a = summary.querySelector('a[href*="/tree/"]');
+      if (a) {
+        const m = (a.getAttribute('href') || '').match(/\/tree\/(.+)$/);
+        if (m) return decodeURIComponent(m[1]);
+      }
+    }
+    // 旧版兜底：.base-ref 的 title 形如 "owner:branch"
+    const old = document.querySelector('.base-ref');
+    if (old) {
+      const t = (old.getAttribute('title') || old.textContent || '').trim();
+      return t.includes(':') ? t.split(':').pop() : (t || null);
+    }
+    return null;
+  }
+
   // 合并框（仅 PR 会话页 /pull/N 存在；其它子页读不到 CI/审查状态）
   function getMergeBox() {
     return document.querySelector('[data-testid="mergebox-partial"]')
         || document.querySelector('[data-testid="mergebox-border-container"]');
   }
 
-  // 综合判定 favicon 颜色（优先级：merged > closed > CI失败 > approve/未block > draft > open）
+  // 综合判定 favicon 颜色
+  // 优先级：merged > closed > stacked(非 main/master base) > CI失败 > 冲突 > approve/未block > draft > open
   function getColorKey() {
     const state = getState();
     if (state === 'merged') return 'purple';
     if (state === 'closed') return 'red';
+
+    // stacked：不是往主干（main/master）合，而是叠在别的分支上 -> 灰。
+    // 优先于 CI/冲突：这类 PR 的合并态是"临时"的，等它 base 合入主干后才真正评估，
+    // 所以此刻的冲突/检查都先不当回事，用灰色标成"暂不关注"。
+    const base = getBaseBranch();
+    if (base && base !== 'main' && base !== 'master') return 'gray';
 
     const box = getMergeBox();
     if (box) {
       const text = box.textContent || '';
       // CI 有失败的检查 -> 红（覆盖 open / draft）
       if (/were not successful|checks? have failed|\d+\s*failing/i.test(text)) return 'red';
+      // 有冲突 -> 红（即使已 approve / 无需再 approve 也要提示去解冲突）
+      if (/conflicts that must be resolved|has conflicts/i.test(text)) return 'red';
       // 金色：必须有"明确正向信号"（有人 approve / 能合 / 无冲突），且没有 blocked。
       // 不再用"没有 blocked 文字"来推断金色——否则合并框加载到一半、blocked
       // 文字还没渲染时会先闪一下金再变回绿（这就是之前看到的"出错/闪烁"）。
