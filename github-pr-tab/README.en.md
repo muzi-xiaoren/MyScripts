@@ -16,9 +16,11 @@ The favicon color is decided by priority (high → low):
 | 3 | Stacked: base is not the trunk (`main`/`master`) but another branch | ⚪ Gray `#6e7781` |
 | 4 | CI has a failed check | 🔴 Red `#cf222e` |
 | 5 | Has conflicts (must be resolved to merge) | 🔴 Red `#cf222e` |
-| 6 | Someone approved, or merge is no longer blocked | 🟡 Gold `#d4a017` |
+| 6 | Someone approved, or merge is no longer blocked | 🟠 Orange `#f66a0a` |
 | 7 | Draft (none of the above) | ⚫ Black `#000000` |
 | 8 | Open (none of the above) | 🟢 Green `#1f883d` |
+
+> **An approval is an explicit positive signal and ignores `blocked`**: with a trunk merge queue, GitHub keeps showing `Merging is blocked` until the checks finish. So as soon as the merge box says `Changes approved`, the favicon turns orange without requiring "not blocked" — otherwise approved PRs would stay green. Conversely, "not approved but already mergeable" is *inferred* from the absence of blocking text, so it still requires "not blocked" to avoid an orange flash while the merge box is half-loaded.
 
 > **Gray (stacked) beats red**: a PR stacked on another branch has a "provisional" merge state — it's only truly evaluated once its base lands on the trunk, so its conflicts / CI are ignored for now and it's grayed out as "not my concern yet". Only PRs that actually target the trunk turn red on conflict / CI failure.
 >
@@ -54,7 +56,7 @@ const COLORS = {
   green:  '#1f883d', // Open
   black:  '#000000', // Draft
   red:    '#cf222e', // Closed / CI failure / conflict
-  gold:   '#d4a017', // Approved / mergeable
+  orange: '#f66a0a', // Approved / mergeable
   purple: '#8250df', // Merged
   gray:   '#6e7781', // Stacked (base is not the trunk)
 };

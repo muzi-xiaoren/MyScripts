@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GitHub PR Tab — Compact Number + Status Color
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      3.9.0
-// @description  Show the PR/Issue number in the browser tab (compact) and color the favicon by status (stacked/non-main base, CI failure, conflict, review/merge, draft, open).
+// @version      3.10.0
+// @description  Show the PR/Issue number in the browser tab (compact) and color the favicon by status (stacked/non-main base, CI failure, conflict, approved, draft, open).
 // @author       muzi-xiaoren
 // @match        https://github.com/*
 // @run-at       document-end
@@ -22,7 +22,7 @@
     green:  '#1f883d', // open（基础色）
     black:  '#000000', // draft（基础色）
     red:    '#cf222e', // CI 有失败 / 有冲突 / closed
-    gold:   '#d4a017', // 有人 approve 或 merge 不再被 block
+    orange: '#f66a0a', // 有人 approve，或 merge 不再被 block
     purple: '#8250df', // merged
     gray:   '#6e7781', // stacked：base 不是默认分支（main/master），不是往主干合
   };
@@ -91,7 +91,7 @@
   }
 
   // 综合判定 favicon 颜色
-  // 优先级：merged > closed > stacked(非 main/master base) > CI失败 > 冲突 > approve/未block > draft > open
+  // 优先级：merged > closed > stacked(非 main/master base) > CI失败 > 冲突 > approve/可合 > draft > open
   function getColorKey() {
     const state = getState();
     if (state === 'merged') return 'purple';
@@ -110,13 +110,15 @@
       if (/were not successful|checks? have failed|\d+\s*failing/i.test(text)) return 'red';
       // 有冲突 -> 红（即使已 approve / 无需再 approve 也要提示去解冲突）
       if (/conflicts that must be resolved|has conflicts/i.test(text)) return 'red';
-      // 金色：必须有"明确正向信号"（有人 approve / 能合 / 无冲突），且没有 blocked。
-      // 不再用"没有 blocked 文字"来推断金色——否则合并框加载到一半、blocked
-      // 文字还没渲染时会先闪一下金再变回绿（这就是之前看到的"出错/闪烁"）。
+      // 有人 approve -> 橙。这是"明确正向信号"，不再拿 blocked 否掉它：
+      // 走 trunk 合并队列后，检查跑完前 GitHub 一直挂着 "Merging is blocked"，
+      // 旧的 !blocked 门槛会把已 approve 的 PR 一路压成绿色。
+      if (/changes approved|approved these changes/i.test(text)) return 'orange';
+      // 没 approve 但已经能合 -> 也算正向信号。这条仍要求没有 blocked：
+      // 它靠"没有拦截文字"推断，合并框半加载时会先闪一下橙再变回绿。
       const blocked   = /merging is blocked/i.test(text);
-      const approved  = /changes approved|approved these changes/i.test(text);
       const mergeable = /merging can be performed|no conflicts with base branch/i.test(text);
-      if (!blocked && (approved || mergeable)) return 'gold';
+      if (!blocked && mergeable) return 'orange';
     }
 
     if (state === 'draft') return 'black';
