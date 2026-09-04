@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PT 助手 · 不可躺
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      1.0.0
+// @version      1.0.1
 // @description  www.tangpt.top 每日流程助手，每一步一个独立开关：① 收件箱清理 ② 一百连抽 + 结果累计 ③ 领取任务(月末领 VIP，平时领苍蝇腿) ④ 签到得魔力 ⑤ 老虎机开转两次 ⑥ 回主页。抽奖与老虎机结果记在侧边悬浮框里，按天持久化。
 // @author       muzi-xiaoren
 // @match        https://www.tangpt.top/index.php*
@@ -33,7 +33,14 @@
   };
 
   // 自动串联：做完一步就自己跳到下一步的页面。关掉则只做当前页面这一步。
-  const CHAIN = { enabled: true, hopDelay: 1200, maxAttempts: 2 };
+  const CHAIN = {
+    enabled: true,
+    hopDelay: 1200,
+    maxAttempts: 2,
+    // 入口闸门：顶部「签到得魔力」还在（= 今天还没签到）才启动流程；
+    // 已经签到过就说明今天跑过了，整个不启动。改 false 可以无条件启动。
+    requirePendingCheckin: true,
+  };
 
   const MAIL = {
     unreadDeletePrefix: '任务',  // 未读只删标题以此开头的，其余未读一律保留
@@ -440,6 +447,16 @@
     }
   }
 
+  // 闸门只管「启不启动」，不管「继不继续」：第四步签到成功后顶部那个入口就没了，
+  // 要是每次页面加载都拿它拦一下，第五、六步会被自己刚做完的签到挡死。
+  // 所以当天已经动过的流程一律放行。
+  const checkinPending = () => !!document.querySelector('a.faqlink[href*="attendance.php"]');
+  const startedToday = Object.keys(st.done).length > 0 || Object.keys(st.attempts).length > 0;
+
   paint();
-  runChain();
+  if (CHAIN.requirePendingCheckin && !startedToday && !checkinPending()) {
+    note('今天已签到，流程不启动');
+  } else {
+    runChain();
+  }
 })();
