@@ -65,6 +65,7 @@ const FEATURES = {
 | 变量 | 默认 | 说明 |
 | --- | --- | --- |
 | `CHAIN.enabled` | `true` | 是否自动串联跳下一步 |
+| `CHAIN.requirePendingCheckin` | `true` | 顶部「签到得魔力」还在（= 今天还没签到）才启动流程；已签到就整个不启动 |
 | `CHAIN.maxAttempts` | `2` | 单步失败重试上限，防止卡在一步上反复刷 |
 | `MAIL.unreadDeletePrefix` | `'任务'` | 未读邮件只删这个标题前缀的 |
 | `LOTTERY.drawCount` | `100` | 点哪个按钮（站点只有 1 / 10 / 20 / 50 / 100） |
@@ -78,3 +79,5 @@ const FEATURES = {
 - **抽奖 / 老虎机**：都是站点自己发 `$.post`，脚本不重实现请求，只在 `jQuery.post` 上搭一层旁路读响应，靠字段（抽奖看 `results` + `draw_count`，老虎机看 `reels` + `result`）而不是 URL 来认领域。抽奖仍然点站点原本那个按钮。
 - **任务**：`POST ajax.php {action:'claimTask', exam_id:<data-id>}`，绕开页面自带的 layui 确认框。
 - **签到**：这个站签到就是 GET `attendance.php`，没有验证码。
+
+闸门只管「启不启动」，不管「继不继续」：第四步签到成功后顶部那个入口就消失了，如果每次页面加载都拿它拦一次，第五、六步会被自己刚做完的签到挡死。所以当天已经动过的流程一律放行。

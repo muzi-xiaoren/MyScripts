@@ -65,6 +65,7 @@ At the top of the script, besides `FEATURES`:
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `CHAIN.enabled` | `true` | Whether to hop to the next step automatically |
+| `CHAIN.requirePendingCheckin` | `true` | Only start the routine while the header still shows 「签到得魔力」 (i.e. today's check-in is still pending); if it's already done, nothing starts |
 | `CHAIN.maxAttempts` | `2` | Per-step retry cap, so a failing step can't loop forever |
 | `MAIL.unreadDeletePrefix` | `'任务'` | Unread messages are deleted only with this subject prefix |
 | `LOTTERY.drawCount` | `100` | Which button to press (the site offers 1 / 10 / 20 / 50 / 100) |
@@ -78,3 +79,5 @@ At the top of the script, besides `FEATURES`:
 - **Lottery / slot**: both are the site's own `$.post` calls. The script doesn't reimplement the requests — it taps `jQuery.post` and reads the responses, identifying them by fields (`results` + `draw_count` for the lottery, `reels` + `result` for the slot) rather than by URL. The lottery still goes through the site's own button.
 - **Task**: `POST ajax.php {action:'claimTask', exam_id:<data-id>}`, which sidesteps the page's layui confirm dialog.
 - **Check-in**: on this site the check-in is just a GET to `attendance.php`, no captcha.
+
+The gate governs *starting*, not *continuing*: step 4 removes that header link on success, so re-checking it on every page load would let the just-completed check-in block steps 5 and 6. Any routine that has already made progress today is therefore let through.
