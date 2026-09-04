@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PT 签到 · VC-Lib
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      1.0.0
+// @version      1.0.1
 // @description  打开 pt.vclib.online 时自动检测签到状态：未签到就在当前页正中央弹出站点自己的验证码，输满字符即自动完成签到（验证码由你本人识别，脚本不代填）；已签到则什么都不做。
 // @author       muzi-xiaoren
 // @match        https://pt.vclib.online/*
@@ -140,19 +140,23 @@
     // 只在你没在输别的东西时才抢焦点，免得打断站内搜索。
     if (document.activeElement === document.body) ui.input.focus();
 
-    async function refresh() {
-      ui.tip.textContent = '换一张…';
+    // msg：换图的原因（如「验证码不对」）。换完要把它留在提示区——早先版本在这里
+    // 无条件清空提示，输错验证码时就只是悄悄换一张图，一个字的反馈都没有，
+    // 手感和「输完没反应」一模一样。
+    async function refresh(msg) {
+      ui.tip.textContent = msg ? msg + '，换一张…' : '换一张…';
       try {
         const next = await loadCaptcha();
         if (next) { cap = next; ui.img.src = next.src; }
-        ui.tip.textContent = '';
+        ui.tip.textContent = msg || '';
         ui.input.value = '';
         ui.input.focus();
       } catch (e) {
-        ui.tip.textContent = '取验证码失败,点图片重试';
+        ui.tip.textContent = '取验证码失败，点图片重试';
       }
     }
-    ui.img.onclick = refresh;
+    // 包一层：onclick 会把 MouseEvent 当成 msg 传进去。
+    ui.img.onclick = () => refresh();
 
     let busy = false;
     async function go() {
@@ -172,10 +176,9 @@
           return;
         }
         // 多半是验证码看错了：换一张接着来（hash 已被服务端消费，不能重投）。
-        ui.tip.textContent = /验证码|captcha/i.test(res.err) ? '验证码不对,换一张' : '签到未成功,再试一次';
-        await refresh();
+        await refresh(/验证码|captcha/i.test(res.err) ? '验证码不对' : '签到未成功');
       } catch (e) {
-        ui.tip.textContent = '网络失败,回车重试';
+        ui.tip.textContent = '网络失败，回车重试';
       } finally {
         busy = false;
       }
