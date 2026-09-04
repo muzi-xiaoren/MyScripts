@@ -27,6 +27,7 @@
 | [pt-checkin-hdfans](./pt-checkin-hdfans) | 1.0.0 | HDFans：打开页面时自动检测并完成每日签到，未签到则签到后回到 `torrents.php` 并刷新，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-hdfans/pt-checkin-hdfans.user.js) |
 | [pt-checkin-vclib](./pt-checkin-vclib) | 1.0.2 | VC-Lib：打开页面时若今天未签到，在当前页正中央弹出站点自己的验证码（放大 2 倍），输满 6 位自动完成签到并刷新（验证码由你本人识别，脚本不代填），已签到则不弹 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-vclib/pt-checkin-vclib.user.js) |
 | [pt-checkin-bitporn](./pt-checkin-bitporn) | 1.0.0 | BitPorn(UNIT3D)：打开页面时自动领取当月「Daily Reward」日历里今天的奖励（事件 id 按月自动 +1），领完回到 `/trending`，已领则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-bitporn/pt-checkin-bitporn.user.js) |
+| [pt-tangpt-helper](./pt-tangpt-helper) | 1.0.0 | 不可躺(tangpt) 多功能助手，每个功能一个独立开关：① 收件箱批量清理（删所有已读 + 标题以「任务」开头的未读，其余未读保留）② 抽奖结果累计记录（侧边悬浮框，按天持久化，魔力值只记总变化） | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-tangpt-helper/pt-tangpt-helper.user.js) |
 
 ## 如何安装脚本
 
