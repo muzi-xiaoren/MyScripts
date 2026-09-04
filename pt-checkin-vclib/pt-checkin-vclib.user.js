@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PT 签到 · VC-Lib
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      1.0.1
+// @version      1.0.2
 // @description  打开 pt.vclib.online 时自动检测签到状态：未签到就在当前页正中央弹出站点自己的验证码，输满字符即自动完成签到（验证码由你本人识别，脚本不代填）；已签到则什么都不做。
 // @author       muzi-xiaoren
 // @match        https://pt.vclib.online/*
@@ -89,10 +89,16 @@
       body: new URLSearchParams({ imagehash: hash, imagestring: text }),
     }));
     const banner = doc.querySelector('a[href*="attendance.php"]');
+    // 失败时 NexusPHP 回 stdmsg 报错页：<h2>Error</h2> + 一个只装原因的 td.text
+    // （本站文案是「图片代码无效！…」，一个「验证码」都没有）。
+    // 两个坑：整页布局的外层也是 td.text，所以要取最后一个而不是第一个；
+    // 原因也不在 body 文字的开头，那一段全是顶部导航，别去截前几百字符找。
+    const tds = doc.querySelectorAll('td.text');
+    const detail = tds.length > 1 ? tds[tds.length - 1] : null;
     return {
       ok: !isPending(doc),
       note: banner ? banner.textContent.trim() : '',
-      err: (doc.body ? doc.body.innerText : '').replace(/\s+/g, ' ').slice(0, 120),
+      err: detail ? detail.textContent.trim().replace(/\s+/g, ' ') : '',
     };
   }
 
@@ -176,7 +182,11 @@
           return;
         }
         // 多半是验证码看错了：换一张接着来（hash 已被服务端消费，不能重投）。
-        await refresh(/验证码|captcha/i.test(res.err) ? '验证码不对' : '签到未成功');
+        // 认得出就说人话，认不出就把站点原话搬过来——比编一句「签到未成功」有用。
+        await refresh(
+          /图片代码|验证码|captcha|image code/i.test(res.err) ? '验证码不对'
+            : (res.err ? res.err.slice(0, 20) : '签到未成功')
+        );
       } catch (e) {
         ui.tip.textContent = '网络失败，回车重试';
       } finally {
