@@ -1,11 +1,12 @@
 // ==UserScript==
 // @name         PT 签到 · Mua
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      1.1.0
-// @description  打开 mua.xloli.cc 时自动检测签到状态：未签到就签到并回到指定页面，已签到则什么都不做。
+// @version      2.0.0
+// @description  打开 mua.xloli.cc 时自动检测签到状态：未签到就去签到页完成签到并回到指定页面，已签到则什么都不做。适配站点新增的 Cloudflare Turnstile 安全验证。
 // @author       muzi-xiaoren
 // @match        https://mua.xloli.cc/*
 // @run-at       document-end
+// @noframes
 // @grant        none
 // @homepageURL  https://github.com/muzi-xiaoren/MyScripts
 // @supportURL   https://github.com/muzi-xiaoren/MyScripts/issues
@@ -17,63 +18,81 @@
 (function () {
   'use strict';
 
-  // 【配置】签到成功后停留 / 跳转到的页面。留空 '' 则只刷新触发签到的当前页。
+  // 【配置】签到成功后停留 / 跳转到的页面。留空 '' 则只刷新签到页所在的当前页。
   const RETURN_TO = 'https://mua.xloli.cc/special.php';
-  // 网络抗抖：单次请求超时(毫秒) + 失败最多重试次数（线性退避）。
-  const FETCH_TIMEOUT = 8000;
-  const FETCH_TRIES = 3;
+  // 等 Turnstile 发令牌的最长时间(毫秒)。超时就把签到页留给用户手动点。
+  const TOKEN_TIMEOUT = 20000;
+  const TOKEN_POLL = 300;
+  // 一天最多自动尝试几次（令牌过期 / 提交失败时的上限，防止反复跳转）。
+  const MAX_TRIES = 3;
 
-  // 带超时 + 自动重试的 fetch：单次超 FETCH_TIMEOUT 毫秒就中断重发，最多 FETCH_TRIES 次。
-  // 网络卡顿时更稳；若全部失败，则交给「下次打开页面」的被动重试兜底（本次不写已完成标记）。
-  async function tryFetch(url, opts) {
-    let lastErr;
-    for (let i = 1; i <= FETCH_TRIES; i++) {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT);
-      try {
-        const r = await fetch(url, Object.assign({ credentials: 'same-origin' }, opts, { signal: ctrl.signal }));
-        clearTimeout(timer);
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        return r;
-      } catch (e) {
-        clearTimeout(timer);
-        lastErr = e;
-        if (i < FETCH_TRIES) await new Promise((s) => setTimeout(s, 800 * i));
-      }
-    }
-    throw lastErr;
+  const ATTENDANCE_PATH = '/attendance.php';
+  const DONE_KEY = 'mzx-pter-attendance';
+  const TRY_KEY = 'mzx-pter-attendance-tries';
+  const today = new Date().toLocaleDateString('en-CA');
+
+  // 站点顶部横幅在每个页面都有：未签到时是 <a class="faqlink" href="attendance.php">[今日签到…]</a>，
+  // 签到后 faqlink class 被清空、文字变成「已签到…」。所以靠这个结构判断（各站文案不同，别匹配文字）。
+  const pending = !!document.querySelector('a.faqlink[href*="attendance.php"]');
+
+  function markDone() {
+    localStorage.setItem(DONE_KEY, today);
+    localStorage.removeItem(TRY_KEY);
   }
 
-  // NexusPHP 有两种签到入口：
-  //   ① AJAX 变体（如 PTerClub）：未签 <a id="do-attendance" data-url="attendance-ajax.php">；已签后该节点消失。
-  //   ② 经典变体（如 Mua / KamePT）：未签 <a class="faqlink" href="attendance.php">[…签到…]</a>；
-  //      已签后变成无 faqlink 的纯文本链接（class 被清空）。注意各站「已签」文字不同
-  //      （mua 是「已签到」、kamept 是「签到已得」），所以靠 faqlink 结构判断而非文字。
-  // 取到「未签入口」就签，取不到（已签 / 无入口）就什么都不做。
-  const ajaxLink = document.querySelector('#do-attendance');
-  const classicLink = document.querySelector('a.faqlink[href*="attendance.php"]');
-  const endpoint = ajaxLink
-    ? (ajaxLink.getAttribute('data-url') || 'attendance-ajax.php')
-    : (classicLink ? classicLink.getAttribute('href') : null);
-  if (!endpoint) return; // 已签到 / 当前页无签到入口 → 不签、不跳、不刷
+  function tries() {
+    const raw = localStorage.getItem(TRY_KEY) || '';
+    const [day, n] = raw.split('|');
+    return day === today ? Number(n) || 0 : 0;
+  }
 
-  // 兜底：一天最多自动签一次，避免异常下反复 fetch + 跳转 / 刷新。（localStorage 按域隔离，各站互不影响）
-  const today = new Date().toLocaleDateString('en-CA');
-  if (localStorage.getItem('mzx-pter-attendance') === today) return;
+  function bumpTries() {
+    localStorage.setItem(TRY_KEY, today + '|' + (tries() + 1));
+  }
 
-  // 签到（带超时 + 重试）。成功后标记今天已完成并回到 RETURN_TO（已在该页就原地刷新）；
-  // 重试仍全失败则不标记，下次打开页面再试。
-  tryFetch(endpoint)
-    .then(() => {
-      localStorage.setItem('mzx-pter-attendance', today);
-      const here = location.href.replace(/#.*$/, '');
-      if (RETURN_TO && here !== RETURN_TO) {
-        location.href = RETURN_TO;
-      } else {
-        location.reload();
+  function leave() {
+    const here = location.href.replace(/#.*$/, '');
+    if (RETURN_TO && here !== RETURN_TO) location.href = RETURN_TO;
+    else location.reload();
+  }
+
+  // 签到页：站点现在会先渲染一个 Cloudflare Turnstile 小组件，签到表单要带
+  // Turnstile 自己写进隐藏域的 cf-turnstile-response 令牌 POST 过去才算数。
+  // 本脚本不碰验证本身 —— 只是等 Cloudflare 的组件在你自己的浏览器里把令牌发下来，
+  // 令牌到手就提交站点原本的表单；令牌一直不来（说明 Cloudflare 要求人工交互），
+  // 就什么都不做，把页面原样留给你自己点。
+  async function checkInHere() {
+    if (!pending) {         // 已签到（含 POST 成功后的回显页）→ 收工回去
+      markDone();
+      leave();
+      return;
+    }
+    if (tries() >= MAX_TRIES) return;
+
+    const form = document.querySelector('form[action*="attendance.php"]');
+    if (!form) return;
+
+    const deadline = Date.now() + TOKEN_TIMEOUT;
+    while (Date.now() < deadline) {
+      const token = form.querySelector('input[name="cf-turnstile-response"]');
+      if (token && token.value) {
+        bumpTries();
+        form.submit();
+        return;
       }
-    })
-    .catch(() => {
-      /* 重试后仍失败：不写标记、不跳、不刷，下次打开页面再试 */
-    });
+      await new Promise((s) => setTimeout(s, TOKEN_POLL));
+    }
+  }
+
+  if (location.pathname === ATTENDANCE_PATH) {
+    checkInHere();
+    return;
+  }
+
+  // 其它页面：未签到就把浏览器带去签到页（旧版直接 fetch attendance.php 已失效——
+  // 那样只会拿回一张验证页面，签到不会生效）。签到页跑完会自动回到 RETURN_TO。
+  if (!pending) return;
+  if (localStorage.getItem(DONE_KEY) === today) return;
+  if (tries() >= MAX_TRIES) return;
+  location.href = 'https://mua.xloli.cc' + ATTENDANCE_PATH;
 })();
