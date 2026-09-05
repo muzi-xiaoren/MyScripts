@@ -35,9 +35,9 @@ Lottery and slot each get their own block. Bonus points are tracked as totals on
 ```
 【抽奖】
 消耗魔力值：4,000,000
-魔力值：70,288,282.1点
 抽中魔力值：3,560,000点
 折算魔力值：185,160
+变化魔力值：+2,586,514.7
 
 上传量：9GB
 未发放补签卡，1 张补签卡全部折算 (当前上限 365 张) ×5
@@ -50,9 +50,15 @@ Lottery and slot each get their own block. Bonus points are tracked as totals on
 净变化：-3,125
 ```
 
+`变化魔力值` is today's opening balance versus the current one, read off the header user bar rather than derived from the draws — so check-in, tasks and the slot machine all count towards it.
+
+Prize lines accumulate by occurrence (a repeated sentence collapses into `×N`). **Undelivered medals get no line of their own**: their converted bonus already lands in `折算魔力值`, and listing every medal name only floods the panel.
+
 Prize lines prefer the site's own `summary_entries` (`{key,label,amount,unit}`): when a quantity is available it renders as `name: qty unit (granted X, the rest converted to N bonus)`. **When no quantity can be derived** — converted prizes report `amount` 0 and keep the count only inside the sentence — **the site's own line is copied verbatim**, with duplicates collapsed into `×N`.
 
 `复制` copies the whole record; `重置流程` clears today's progress and log (local only, the site is untouched).
+
+The `–` in the title bar shrinks the panel into a small ball; click the ball to expand it again. Both the title bar and the ball can be dragged. Position and collapsed state are stored separately, survive across days, and `重置流程` does not clear them.
 
 ## Install
 

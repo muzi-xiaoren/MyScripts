@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PT 助手 · 不可躺
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      1.0.1
+// @version      1.1.0
 // @description  www.tangpt.top 每日流程助手，每一步一个独立开关：① 收件箱清理 ② 一百连抽 + 结果累计 ③ 领取任务(月末领 VIP，平时领苍蝇腿) ④ 签到得魔力 ⑤ 老虎机开转两次 ⑥ 回主页。抽奖与老虎机结果记在侧边悬浮框里，按天持久化。
 // @author       muzi-xiaoren
 // @match        https://www.tangpt.top/index.php*
@@ -86,6 +86,8 @@
     done: {},
     attempts: {},
     notes: {},
+    bonusStart: null,
+    bonusNow: null,
     lottery: { draws: 0, cost: 0, comp: 0, bonusWon: 0, bonusAfter: null, items: {} },
     slot: { spins: 0, free: 0, cost: 0, payout: 0, wins: 0, jackpots: 0, balanceAfter: null, combos: {} },
   });
@@ -103,15 +105,58 @@
   let st = load();
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch (e) {} };
 
+  // 顶部用户栏：<font class="color_bonus">魔力值</font>: <a>[?]</a> 70,553,941.8
+  // 站点没给这个数字挂 id，只能从标签往后找第一个数字；找不到就返回 null，那行显示「—」。
+  function readBonus() {
+    const tag = [...document.querySelectorAll('font.color_bonus')]
+      .find((f) => (f.textContent || '').trim().indexOf('魔力值') === 0);
+    if (!tag) return null;
+    let n = tag.nextSibling;
+    for (let i = 0; n && i < 8; i++, n = n.nextSibling) {
+      const m = (n.textContent || '').match(/[0-9][0-9,]*(?:\.[0-9]+)?/);
+      if (m) return Number(m[0].replace(/,/g, ''));
+    }
+    return null;
+  }
+
+  function markBonus(v) {
+    if (v == null) return;
+    if (st.bonusStart == null) st.bonusStart = v;
+    st.bonusNow = v;
+  }
+  markBonus(readBonus());
+  save();
+
   // ---------- 悬浮框 ----------
-  const box = el('div', `position:fixed;right:16px;top:96px;z-index:2147483000;width:330px;max-height:74vh;overflow:auto;
+  // 位置和折叠状态单独存一份，跨天保留，「重置流程」也不动它。
+  const UIKEY = 'mzx-tangpt-ui';
+  const ui = (() => {
+    try {
+      const u = JSON.parse(localStorage.getItem(UIKEY) || 'null');
+      if (u && typeof u === 'object') return u;
+    } catch (e) {}
+    return {};
+  })();
+  const saveUi = () => { try { localStorage.setItem(UIKEY, JSON.stringify(ui)); } catch (e) {} };
+
+  const BOX_W = 330;
+  const BALL_D = 52;
+
+  const box = el('div', `position:fixed;left:0;top:0;z-index:2147483000;width:${BOX_W}px;max-height:74vh;overflow:auto;
     background:#1f2328;color:#e6edf3;border:1px solid #3d444d;border-radius:12px;padding:14px 16px;
     font:13px/1.6 system-ui,-apple-system,"PingFang SC",sans-serif;box-shadow:0 12px 48px rgba(0,0,0,.55)`);
-  const head = el('div', 'display:flex;align-items:center;justify-content:space-between;margin-bottom:6px');
+  const ball = el('div', `position:fixed;left:0;top:0;z-index:2147483000;width:${BALL_D}px;height:${BALL_D}px;display:none;
+    align-items:center;justify-content:center;border-radius:50%;background:#1f2328;color:#e6edf3;
+    border:1px solid #3d444d;cursor:grab;user-select:none;box-shadow:0 8px 28px rgba(0,0,0,.55);
+    font:13px/1 system-ui,-apple-system,"PingFang SC",sans-serif`, { textContent: '记录', title: '点击展开，拖动可移位' });
+
+  const head = el('div', 'display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;cursor:grab;user-select:none');
   head.appendChild(el('b', 'font-weight:600', { textContent: '今日记录' }));
-  const closeBtn = el('span', 'cursor:pointer;opacity:.6;padding:0 2px;font-size:16px', { textContent: '×' });
-  closeBtn.onclick = () => box.remove();
-  head.appendChild(closeBtn);
+  const ctrl = el('div', 'display:flex;gap:6px;align-items:center');
+  const minBtn = el('span', 'cursor:pointer;opacity:.6;padding:0 4px;font-size:16px', { textContent: '–', title: '最小化' });
+  const closeBtn = el('span', 'cursor:pointer;opacity:.6;padding:0 2px;font-size:16px', { textContent: '×', title: '关掉，刷新后再出现' });
+  ctrl.append(minBtn, closeBtn);
+  head.appendChild(ctrl);
   const statusEl = el('div', 'font-size:12px;opacity:.75;margin-bottom:8px;white-space:pre-wrap');
   const bodyEl = el('div', 'white-space:pre-wrap;font:12px/1.7 ui-monospace,monospace');
   const barEl = el('div', 'display:flex;gap:8px;margin-top:10px');
@@ -120,7 +165,66 @@
   const resetBtn = el('button', BTN, { textContent: '重置流程' });
   barEl.append(copyBtn, resetBtn);
   box.append(head, statusEl, bodyEl, barEl);
-  document.body.appendChild(box);
+  document.body.append(box, ball);
+
+  function place() {
+    const node = ui.collapsed ? ball : box;
+    const w = ui.collapsed ? BALL_D : BOX_W;
+    const h = ui.collapsed ? BALL_D : Math.min(node.offsetHeight || 240, innerHeight - 16);
+    const left = ui.left == null ? innerWidth - BOX_W - 16 : ui.left;
+    const top = ui.top == null ? 96 : ui.top;
+    ui.left = Math.min(Math.max(left, 8), Math.max(8, innerWidth - w - 8));
+    ui.top = Math.min(Math.max(top, 8), Math.max(8, innerHeight - h - 8));
+    node.style.left = ui.left + 'px';
+    node.style.top = ui.top + 'px';
+  }
+
+  function setCollapsed(v) {
+    ui.collapsed = !!v;
+    saveUi();
+    box.style.display = ui.collapsed ? 'none' : 'block';
+    ball.style.display = ui.collapsed ? 'flex' : 'none';
+    place();
+  }
+
+  // 拖动和点击共用一个手柄：位移不到 4px 当点击，超过就当拖动并记下落点。
+  function draggable(handle, onClick) {
+    let sx = 0, sy = 0, ol = 0, ot = 0, moved = false, on = false;
+    handle.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0 || e.target.__nodrag) return;
+      const r = (ui.collapsed ? ball : box).getBoundingClientRect();
+      sx = e.clientX; sy = e.clientY; ol = r.left; ot = r.top; moved = false; on = true;
+      handle.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    });
+    handle.addEventListener('pointermove', (e) => {
+      if (!on) return;
+      const dx = e.clientX - sx, dy = e.clientY - sy;
+      if (!moved && Math.abs(dx) + Math.abs(dy) < 4) return;
+      moved = true;
+      ui.left = ol + dx;
+      ui.top = ot + dy;
+      place();
+    });
+    const end = (e) => {
+      if (!on) return;
+      on = false;
+      try { handle.releasePointerCapture(e.pointerId); } catch (err) {}
+      if (moved) saveUi();
+      else if (onClick) onClick();
+    };
+    handle.addEventListener('pointerup', end);
+    handle.addEventListener('pointercancel', end);
+  }
+
+  minBtn.__nodrag = true;
+  closeBtn.__nodrag = true;
+  minBtn.onclick = () => setCollapsed(true);
+  closeBtn.onclick = () => { box.style.display = 'none'; ball.style.display = 'none'; };
+  draggable(head, null);
+  draggable(ball, () => setCollapsed(false));
+  addEventListener('resize', place);
+  setCollapsed(!!ui.collapsed);
 
   const note = (t) => { st.notes[path] = t; save(); statusEl.textContent = progressLine() + (t ? '\n' + t : ''); };
 
@@ -138,7 +242,10 @@
     L.draws += Number(res.draw_count) || 0;
     L.cost += Number(res.total_cost) || 0;
     L.comp += Number(res.total_compensated_bonus) || 0;
-    if (res.user_bonus_after != null) L.bonusAfter = Number(res.user_bonus_after);
+    if (res.user_bonus_after != null) {
+      L.bonusAfter = Number(res.user_bonus_after);
+      markBonus(L.bonusAfter);
+    }
 
     for (const r of res.results || []) {
       const fallback = String(r.prize_name || '未命名奖品');
@@ -149,6 +256,8 @@
         const key = String(e.key || e.label || fallback);
         const amount = Number(e.amount) || 0;
         if (key === 'bonus') { L.bonusWon += amount; return; }
+        // 未发放的勋章不逐条记名字：它折算的魔力已经在 total_compensated_bonus 里了
+        if (key === 'medal' && r.is_compensated) return;
         const b = L.items[key] || (L.items[key] = {
           label: String(e.label || key), unit: String(e.unit || ''),
           amount: 0, granted: 0, compBonus: 0, count: 0, raw: {},
@@ -176,7 +285,10 @@
     S.payout += Number(res.payout != null ? res.payout : res.reward) || 0;
     if (res.result === 'win') S.wins += 1;
     if (res.is_jackpot || res.result === 'jackpot') S.jackpots += 1;
-    if (res.balance_after != null) S.balanceAfter = Number(res.balance_after);
+    if (res.balance_after != null) {
+      S.balanceAfter = Number(res.balance_after);
+      markBonus(S.balanceAfter);
+    }
     const name = (res.row && (res.row.name || res.row.combo)) || (res.result === 'win' ? '中奖' : '未中奖');
     const c = S.combos[name] || (S.combos[name] = { count: 0, payout: 0 });
     c.count += 1;
@@ -192,14 +304,17 @@
   //   无单位          → 名称：折算N魔力 / 已折算N魔力
   function lotteryLines() {
     const L = st.lottery;
+    const delta = st.bonusStart == null || st.bonusNow == null ? null : st.bonusNow - st.bonusStart;
     const out = [
       `消耗魔力值：${fmt(L.cost)}`,
-      `魔力值：${L.bonusAfter == null ? '—' : fmt(L.bonusAfter) + '点'}`,
       `抽中魔力值：${fmt(L.bonusWon)}点`,
       `折算魔力值：${fmt(L.comp)}`,
+      `变化魔力值：${delta == null ? '—' : (delta >= 0 ? '+' : '') + fmt(delta)}`,
       '',
     ];
-    for (const b of Object.values(L.items)) {
+    for (const [key, b] of Object.entries(L.items)) {
+      // 未发放的勋章只进折算魔力值，不占行（这条也管住升级前已经存下的旧数据）
+      if (key === 'medal' && !(b.amount > 0)) continue;
       // 规则算不出数量（折算类奖品的 amount 是 0）就退回站点原话，一行一条、带出现次数
       if (!(b.amount > 0)) {
         const raws = Object.entries(b.raw || {});
@@ -245,6 +360,7 @@
   function paint() {
     statusEl.textContent = progressLine() + (st.notes[path] ? '\n' + st.notes[path] : '');
     bodyEl.textContent = report();
+    place();
   }
 
   copyBtn.onclick = () => {
@@ -256,6 +372,7 @@
   resetBtn.onclick = () => {
     if (!confirm('重置今天的流程进度和记录？只清本地数据，不影响站点。')) return;
     st = blank();
+    markBonus(readBonus());
     save();
     paint();
   };
