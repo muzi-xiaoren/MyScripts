@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LINUX DO 助手
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      1.2.2
+// @version      1.3.0
 // @description  linux.do 侧边悬浮框，两个独立开关：① 刷帖：从列表页(默认 /top)从上到下逐个打开帖子，每屏等发言的小蓝点(未读标记)消失再往下滚，读完回列表点下一个 ② 领红包：站点一推送新帖就立刻扫（另有定时兜底）积分乐园的新帖，从楼主发言里找出 credit.linux.do 红包(直链 / base64 / base58 / hex / 倒序 / o→0、中文数字等变形)直接领取，需要解谜的列出来留给你。列表地址都能在悬浮框里改。
 // @author       muzi-xiaoren
 // @match        https://linux.do/*
@@ -28,7 +28,6 @@
     flushAfter: 12000,     // 一屏等了这么久还没清掉，就让站点立刻把攒下的阅读时长再报一次
     leaveWait: 10000,      // 读完离开前最多等这么久，让站点把没报完的阅读时长报完
     bottomRetries: 4,      // 到底后再等几次（每次 1.2s）看有没有加载出更多回复，都没有就算读完
-    maxReplies: 300,       // 回复数超过这个的帖子跳过（几千楼的集中帖刷不完）
     hopDelay: 1500,
   };
 
@@ -39,7 +38,7 @@
   };
 
   const DEFAULTS = {
-    read: { on: false, url: 'https://linux.do/top' },
+    read: { on: false, url: 'https://linux.do/top', maxReplies: 300 },   // 回复数超过 maxReplies 的帖子跳过，0 = 不限
     rp: { on: false, url: 'https://linux.do/c/credit/106/l/new?subset=topics', interval: 60 },
   };
 
@@ -158,6 +157,8 @@
   const secRp = section('领红包');
   const intervalInput = el('input', INPUT + ';flex:0 0 52px', { type: 'number', min: 20, title: '扫描间隔（秒）' });
   secRp.urlRow.insertBefore(intervalInput, secRp.saveBtn);
+  const maxRepliesInput = el('input', INPUT + ';flex:0 0 52px', { type: 'number', min: 0, title: '回复数超过这个的帖子跳过，0 = 不限' });
+  secRead.urlRow.insertBefore(maxRepliesInput, secRead.saveBtn);
   const puzzleEl = el('div', 'font-size:12px;margin-top:6px;word-break:break-all');
   secRp.wrap.appendChild(puzzleEl);
   const logEl = el('div', 'border-top:1px solid #3d444d;margin-top:8px;padding-top:6px;white-space:pre-wrap;font:11px/1.6 ui-monospace,monospace;opacity:.8;max-height:160px;overflow:auto');
@@ -258,6 +259,12 @@
       sec.input.style.borderColor = '';
       cfg[key].url = u.href;
       if (key === 'rp') cfg.rp.interval = Math.max(20, Number(intervalInput.value) || DEFAULTS.rp.interval);
+      if (key === 'read') {
+        const raw = maxRepliesInput.value.trim();
+        const n = raw === '' ? NaN : Math.floor(Number(raw));
+        cfg.read.maxReplies = isFinite(n) && n >= 0 ? n : DEFAULTS.read.maxReplies;
+        maxRepliesInput.value = cfg.read.maxReplies;
+      }
       saveCfg();
       sec.input.value = cfg[key].url;
       sec.saveBtn.textContent = '已保存';
@@ -267,6 +274,7 @@
   bindSection(secRead, 'read');
   bindSection(secRp, 'rp');
   intervalInput.value = cfg.rp.interval;
+  maxRepliesInput.value = cfg.read.maxReplies;
 
   // ---------- 功能一：刷帖 ----------
   const topicIdNow = () => {
@@ -310,7 +318,7 @@
         day.read.visited[id] = 1;
         const link = row.querySelector('a.title');
         if (!link) continue;
-        if (repliesOf(row) > READ.maxReplies) { log(`刷帖跳过（回复太多）：${link.textContent.trim()}`); continue; }
+        if (cfg.read.maxReplies > 0 && repliesOf(row) > cfg.read.maxReplies) { log(`刷帖跳过（回复太多）：${link.textContent.trim()}`); continue; }
         day.read.cur = id;
         saveDay();
         readNote = `正在读：${link.textContent.trim()}`;

@@ -18,7 +18,7 @@ Notes:
 - The site only counts reading time **while the page is visible**; window focus doesn't matter, so a browser window left visible (e.g. on a second screen) keeps counting while you use other apps. When the tab is switched away, minimised or fully covered, the dots never clear; the script pauses and resumes once the page is visible again.
 - The site stops counting after 3 minutes without a scroll, and doesn't count freshly loaded posts until the next scroll, so while waiting for dots the script nudges the page by 1 px every 4 s to restart the timer.
 - Occasionally a reading upload is rejected (e.g. a Cloudflare 403) and the site waits 60 s before reporting those posts again. When a screen hasn't cleared after 12 s, and before leaving a topic, the script asks the site to report right away (real time on screen) and waits up to 10 s for it to finish, so the full-page jump back to the list doesn't drop unsent reading time.
-- Topics with more than 300 replies are skipped (`READ.maxReplies` at the top of the script).
+- Topics with more replies than the limit are skipped (logged as “刷帖跳过（回复太多）”). Set the limit in the number box next to the auto-read URL in the panel (default 300, 0 = no limit) and click Save.
 - While running, if you navigate elsewhere yourself, the script won't drag you back; it resumes once you are on the list page again.
 
 ## Feature 2: red packets
