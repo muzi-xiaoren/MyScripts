@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         LINUX DO 助手
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      1.3.0
-// @description  linux.do 侧边悬浮框，两个独立开关：① 刷帖：从列表页(默认 /top)从上到下逐个打开帖子，每屏等发言的小蓝点(未读标记)消失再往下滚，读完回列表点下一个 ② 领红包：站点一推送新帖就立刻扫（另有定时兜底）积分乐园的新帖，从楼主发言里找出 credit.linux.do 红包(直链 / base64 / base58 / hex / 倒序 / o→0、中文数字等变形)直接领取，需要解谜的列出来留给你。列表地址都能在悬浮框里改。
+// @version      1.4.0
+// @description  linux.do 侧边悬浮框，两个独立开关：① 刷帖：从列表页(默认 /top)从上到下逐个打开帖子，每屏等发言的小蓝点(未读标记)消失再往下滚，节奏随机，读完歇一会儿回列表点下一个 ② 领红包：站点一推送新帖就立刻扫（另有定时兜底）积分乐园的新帖，每个新帖只看一次楼主发言，找出 credit.linux.do 红包(直链 / base64 / base58 / hex / 倒序 / o→0、中文数字等变形)直接领取，需要解谜的列出来留给你。列表地址都能在悬浮框里改。
 // @author       muzi-xiaoren
 // @match        https://linux.do/*
 // @run-at       document-end
@@ -20,21 +20,30 @@
 (function () {
   'use strict';
 
+  // 带 [最小, 最大] 的都在区间里随机取：节奏一成不变、请求一个接一个，最容易被 Cloudflare 当成机器人拦下来
   const READ = {
-    stepRatio: 0.7,        // 每次往下滚多少屏
-    stepPause: 900,        // 滚完停一下，给站点时间把新进视野的发言挂上计时
-    dotTimeout: 20000,     // 一屏的小蓝点最多等这么久，超时就当它不会消失、继续往下
-    nudgeEvery: 4000,      // 等小蓝点时每隔这么久挪 1 像素，让站点重新开始计时
-    flushAfter: 12000,     // 一屏等了这么久还没清掉，就让站点立刻把攒下的阅读时长再报一次
-    leaveWait: 10000,      // 读完离开前最多等这么久，让站点把没报完的阅读时长报完
-    bottomRetries: 4,      // 到底后再等几次（每次 1.2s）看有没有加载出更多回复，都没有就算读完
-    hopDelay: 1500,
+    stepRatio: [0.5, 0.85],    // 每次往下滚多少屏
+    stepPause: [1200, 3000],   // 滚完停一下，给站点时间把新进视野的发言挂上计时
+    lingerChance: 0.15,        // 偶尔多停一会儿，像在看内容
+    linger: [4000, 9000],
+    dotTimeout: 20000,         // 一屏的小蓝点最多等这么久，超时就当它不会消失、继续往下
+    nudgeEvery: 4000,          // 等小蓝点时每隔这么久挪 1 像素，让站点重新开始计时
+    flushAfter: 12000,         // 一屏等了这么久还没清掉，就让站点立刻把攒下的阅读时长再报一次
+    leaveWait: 10000,          // 读完离开前最多等这么久，让站点把没报完的阅读时长报完
+    bottomRetries: 4,          // 到底后再等几次（每次 1.2s）看有没有加载出更多回复，都没有就算读完
+    rest: [10000, 40000],      // 读完一帖歇一会儿再开下一个
+    openTimeout: 15000,        // 点了帖子这么久还没跳过去 / 页面还没出楼层，就当这次没打开
+    failBackoff: [30000, 300000],  // 列表或帖子加载失败后等多久再试：从 30 秒起每次翻倍，最多 5 分钟
+    failPause: 4,              // 连续失败这么多次就暂停，多半要人去过一下 Cloudflare 验证
   };
 
   const RP = {
-    scanTopics: 30,        // 每次扫列表最前面多少个帖子
-    gapMs: 500,            // 两次请求之间的间隔，别把论坛 / credit 打出 429
-    decodeDepth: 3,        // 编码套编码最多拆几层
+    scanTopics: 30,            // 每次扫列表最前面多少个帖子
+    perRound: 5,               // 每轮最多看几个没看过的帖子，剩下的留给下一轮，别一口气发几十个请求
+    gap: [1500, 2500],         // 两次请求之间的间隔
+    pokeGap: 15000,            // 推送触发的加扫离上一轮至少隔这么久，期间来的推送并成一轮
+    backoff: [60000, 600000],  // 被拦（403 / 429）后多久再扫：从 1 分钟起每次翻倍，最多 10 分钟
+    decodeDepth: 3,            // 编码套编码最多拆几层
   };
 
   const DEFAULTS = {
@@ -44,6 +53,8 @@
 
   const today = new Date().toLocaleDateString('en-CA');
   const sleep = (ms) => new Promise((s) => setTimeout(s, ms));
+  const rand = ([a, b]) => a + Math.random() * (b - a);
+  const backoffMs = ([base, max], n) => Math.min(base * 2 ** Math.max(0, n - 1), max) * rand([0.8, 1.2]);
   const errMsg = (e) => (e && e.message ? e.message : String(e));
   const W = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
   const el = (tag, css, props) => Object.assign(Object.assign(document.createElement(tag), props || {}), { style: css });
@@ -59,6 +70,7 @@
   const SEEN_KEY = 'mzx-linuxdo-rp-seen';
   const UI_KEY = 'mzx-linuxdo-ui';
   const DONE_KEY = 'mzx-linuxdo-puzzle-done';
+  const TOPICS_KEY = 'mzx-linuxdo-rp-topics';
 
   const cfg = (() => {
     const c = ls.get(CFG_KEY, {});
@@ -71,8 +83,8 @@
 
   const blankDay = () => ({
     date: today,
-    read: { done: 0, visited: {}, cur: null },
-    rp: { count: 0, amount: 0, topics: {} },
+    read: { done: 0, visited: {}, cur: null, fails: {} },
+    rp: { count: 0, amount: 0 },
     puzzles: [],
     log: [],
   });
@@ -90,6 +102,15 @@
     const keys = Object.keys(seen);
     if (keys.length > 3000) for (const k of keys.slice(0, keys.length - 2000)) delete seen[k];
     ls.set(SEEN_KEY, seen);
+  };
+
+  // 领红包看过的帖子 id → 看的时间。每个帖子只看一次（楼主的发言），之后有新回复、被顶起来都不再看。
+  // 跨天保留，不然每天第一轮会把列表里的旧帖全部重拉一遍。
+  const rpTopics = ls.get(TOPICS_KEY, {});
+  const saveRpTopics = () => {
+    const keys = Object.keys(rpTopics);
+    if (keys.length > 3000) for (const k of keys.slice(0, keys.length - 2000)) delete rpTopics[k];
+    ls.set(TOPICS_KEY, rpTopics);
   };
 
   // 「要手动解的」里打过勾的帖子 id → 打勾时间。跨天保留：第二天重新扫到同一个帖子也不再列出来。
@@ -304,12 +325,68 @@
     }
   }
 
+  async function countdown(ms, note) {
+    const end = Date.now() + ms;
+    while (cfg.read.on && Date.now() < end) {
+      readNote = note(Math.ceil((end - Date.now()) / 1000));
+      paint();
+      await sleep(1000);
+    }
+  }
+
+  function router() {
+    try { return W.Discourse.__container__.lookup('service:router'); } catch (e) { return null; }
+  }
+  // 列表或帖子请求被拦时站点会切到自己的错误页（exception 路由，地址栏还是原来的地址；404 是 exception-unknown）
+  const onErrorPage = () => { const r = router(); return !!r && /^exception/.test(r.currentRouteName || ''); };
+
+  // 站内跳转回列表，不整页刷新：整页刷新最容易撞上 Cloudflare 的整页验证，撞上了脚本就停在那儿等人点。
+  // 等跳转走完再返回，不然下一秒检查时还停在旧页面（比如错误页），会被当成又失败了一次
+  async function goList() {
+    const u = new URL(cfg.read.url);
+    const path = u.pathname + u.search;
+    const r = router();
+    let t;
+    try {
+      // 已经在列表上只是没出帖子，transitionTo 同一个地址什么都不做，要 refresh 重新拉；
+      // 停在错误页时 refresh 刷的是错误页本身，得 transitionTo
+      t = r.currentURL === path && !onErrorPage() ? r.refresh() : r.transitionTo(path);
+    } catch (e) {
+      location.href = cfg.read.url;
+      return;
+    }
+    // 跳转失败（列表请求又被拦）也会 reject，交给下一轮检查按失败处理
+    await Promise.race([Promise.resolve(t).catch(() => {}), sleep(READ.openTimeout)]);
+  }
+
+  // 列表或帖子没加载出来（Cloudflare 偶尔会单独拦掉某个请求）：等一阵再试，等的时间逐次翻倍；
+  // 连着失败好几次多半是要人工过验证了，再试也是被拦，干脆暂停，刷新页面后脚本重新加载会自己接着刷
+  let readFails = 0;
+  let readPaused = false;
+  async function loadFailed(what) {
+    readFails += 1;
+    if (readFails >= READ.failPause) {
+      readPaused = true;
+      readNote = `${what}连续 ${readFails} 次没加载出来，多半被 Cloudflare 拦了：刷新页面、过了验证后会接着刷`;
+      log(`刷帖暂停：${what}连续 ${readFails} 次没加载出来`);
+      return;
+    }
+    const ms = backoffMs(READ.failBackoff, readFails);
+    log(`刷帖：${what}没加载出来，${Math.round(ms / 1000)} 秒后再试`);
+    await countdown(ms, (s) => `${what}没加载出来（可能被 Cloudflare 拦了），${s} 秒后再试`);
+  }
+
   async function pickNext() {
     const rows = await waitFor(() => {
       const r = document.querySelectorAll('tr.topic-list-item[data-topic-id]');
       return r.length ? r : null;
-    }, 15000);
-    if (!rows) { readNote = '列表页没有找到帖子'; paint(); return; }
+    }, READ.openTimeout);
+    if (!rows) {
+      if (!onReadList()) return;
+      await loadFailed('列表页');
+      if (cfg.read.on && !readPaused) await goList();
+      return;
+    }
     // 从上到下找第一个今天还没点过的；列表到底了就滚一下让站点加载下一页，最多加载 5 次
     for (let more = 0; more <= 5 && cfg.read.on; more++) {
       for (const row of document.querySelectorAll('tr.topic-list-item[data-topic-id]')) {
@@ -324,6 +401,12 @@
         readNote = `正在读：${link.textContent.trim()}`;
         paint();
         link.click();
+        // 等地址真变成这个帖子再返回：不然下一秒还在列表页，又会多点一个，前一个就被标成看过却没读
+        if (await waitFor(() => topicIdNow() === id, READ.openTimeout)) return;
+        delete day.read.visited[id];
+        day.read.cur = null;
+        saveDay();
+        if (onReadList()) await loadFailed('帖子');
         return;
       }
       scrollTo(0, document.documentElement.scrollHeight);
@@ -372,9 +455,13 @@
     scrollBy(0, atBottom ? -1 : 1);
   }
 
+  // 返回 true = 读完，'fail' = 页面没出楼层（帖子请求被拦），false = 中途停了或你自己走开了
   async function readTopic(id) {
     let waited = 0, bottom = 0;
-    await waitFor(() => document.querySelector('.topic-post'), 15000);
+    if (!(await waitFor(() => document.querySelector('.topic-post'), READ.openTimeout))) {
+      return cfg.read.on && topicIdNow() === id ? 'fail' : false;
+    }
+    readFails = 0;
     while (cfg.read.on && topicIdNow() === id) {
       // 站点只看页面是否可见（visibilitychange），不管窗口有没有焦点：窗口露在屏幕上、你在用别的程序时照样计时
       if (document.hidden) {
@@ -405,31 +492,44 @@
       bottom = 0;
       readNote = '往下滚…';
       paint();
-      scrollBy({ top: Math.round(innerHeight * READ.stepRatio), behavior: 'smooth' });
-      await sleep(READ.stepPause);
+      scrollBy({ top: Math.round(innerHeight * rand(READ.stepRatio)), behavior: 'smooth' });
+      await sleep(rand(READ.stepPause));
+      if (Math.random() < READ.lingerChance) await sleep(rand(READ.linger));
     }
     return false;
   }
 
   let reading = false;
   async function readTick() {
-    if (!cfg.read.on || reading) return;
+    if (!cfg.read.on || reading || readPaused) return;
     reading = true;
     try {
       const id = topicIdNow();
       if (id && id === day.read.cur) {
-        if (await readTopic(id)) {
+        const r = await readTopic(id);
+        if (r === 'fail') {
+          // 没加载出来不算读完，放回去等下次再点；同一个帖子两次都打不开就跳过（可能被删了或没权限看）
+          day.read.fails[id] = (day.read.fails[id] || 0) + 1;
+          if (day.read.fails[id] < 2) delete day.read.visited[id];
+          day.read.cur = null;
+          saveDay();
+          await loadFailed('帖子');
+          if (cfg.read.on && !readPaused && topicIdNow() === id) await goList();
+        } else if (r) {
           day.read.done += 1;
           day.read.cur = null;
           saveDay();
           log(`刷帖读完：${document.title.replace(/ - LINUX DO$/, '')}`);
-          // 跳回列表是整页刷新，站点内存里还没报出去的阅读时长会被丢掉，先报完再走
+          // 站点要等每 60 秒一次的例行上报才会补报被拒的阅读时长，离开前先让它报完
           readNote = '等站点把阅读时长报完…';
           paint();
           await drainTimings(READ.leaveWait);
-          await sleep(READ.hopDelay);
-          if (cfg.read.on) location.href = cfg.read.url;
+          await countdown(rand(READ.rest), (s) => `读完了，歇 ${s} 秒再开下一个`);
+          if (cfg.read.on && topicIdNow() === id) await goList();
         }
+      } else if (onErrorPage()) {
+        await loadFailed('页面');
+        if (cfg.read.on && !readPaused && onErrorPage()) await goList();
       } else if (onReadList()) {
         await pickNext();
       } else {
@@ -448,8 +548,10 @@
     cfg.read.on = !cfg.read.on;
     saveCfg();
     readNote = '';
+    readPaused = false;
+    readFails = 0;
     paint();
-    if (cfg.read.on && !onReadList() && topicIdNow() !== day.read.cur) location.href = cfg.read.url;
+    if (cfg.read.on && !onReadList() && topicIdNow() !== day.read.cur) goList();
   };
 
   // ---------- 功能二：领红包 ----------
@@ -514,16 +616,16 @@
     if (/erqrairybcr/i.test(text)) tryDecoded(rot13(text));
   }
 
-  const getJSON = async (u) => {
-    const r = await fetch(u, { headers: { Accept: 'application/json' }, credentials: 'same-origin' });
-    if (!r.ok) throw new Error(`${u} → HTTP ${r.status}`);
-    return r.json();
-  };
-  const getText = async (u) => {
-    const r = await fetch(u, { credentials: 'same-origin' });
-    if (!r.ok) throw new Error(`${u} → HTTP ${r.status}`);
-    return r.text();
-  };
+  // 带上站点自己 ajax 的请求头：不带的请求在 Cloudflare 眼里不像站点发的，更容易被拦成 403
+  const SITE_HEADERS = { 'X-Requested-With': 'XMLHttpRequest', 'Discourse-Present': 'true' };
+  async function siteGet(u, accept) {
+    const r = await fetch(u, { headers: Object.assign({ Accept: accept }, SITE_HEADERS), credentials: 'same-origin' });
+    if (!r.ok) throw Object.assign(new Error(`${u} → HTTP ${r.status}`), { status: r.status });
+    return r;
+  }
+  const getJSON = async (u) => (await siteGet(u, 'application/json')).json();
+  const getText = async (u) => (await siteGet(u, 'text/plain, */*')).text();
+  const blocked = (e) => !!e && (e.status === 403 || e.status === 429);
 
   // credit 是另一个域，页面里直接 fetch 会被 CORS 挡，走油猴的跨域请求（带 credit 自己的登录 cookie）。
   // 站点统一回 { error_msg, data }：成功时 error_msg 为空。
@@ -556,7 +658,7 @@
     const e = d.data.red_envelope || {};
     if (d.data.user_claimed) return { ok: false, final: true, msg: '已经领过' };
     if (e.status !== 'active' || !(Number(e.remaining_count) > 0)) return { ok: false, final: true, msg: '已领完' };
-    await sleep(RP.gapMs);
+    await sleep(rand(RP.gap));
     const r = await credit('POST', '/claim', { id });
     return r.ok ? { ok: true, amount: Number(r.data.amount) || 0 } : r;
   }
@@ -580,69 +682,78 @@
   let scanning = false;
   let rescan = false;
   let needLogin = false;
-  // 推送点名的帖子：这一轮不管 bumped_at 有没有变都重看一遍（楼主编辑首帖追加红包不会顶帖）
+  let lastScanAt = 0;
+  let blockedN = 0;
+  let blockedUntil = 0;
+  // 推送点名的新帖：可能还没进列表（「新」列表有缓存），排在这一轮最前面单独看
   const forced = new Set();
   async function rpScan() {
-    if (!cfg.rp.on || needLogin) return;
+    if (!cfg.rp.on || needLogin || Date.now() < blockedUntil) return;
     if (scanning) { rescan = true; return; }
     if (!takeLock()) return;
     scanning = true;
+    lastScanAt = Date.now();
     try {
       rpNote = '扫描中…';
       paint();
-      const must = new Set(forced);
+      const must = [...forced].filter((id) => !rpTopics[id]);
       forced.clear();
       const list = await getJSON(listJsonUrl(cfg.rp.url));
-      const topics = ((list.topic_list || {}).topics || []).slice(0, RP.scanTopics);
-      let fresh = 0;
-      for (const t of topics) {
+      const fresh = ((list.topic_list || {}).topics || []).slice(0, RP.scanTopics)
+        .filter((t) => !rpTopics[t.id] && !must.includes(t.id));
+      const all = [...must.map((id) => ({ id })), ...fresh];
+      const queue = all.slice(0, RP.perRound);
+      for (const t of queue) {
         if (!cfg.rp.on || needLogin) break;
-        // 帖子没有新回复就不用再看：楼主追加红包也会顶起 bumped_at
-        const stamp = `${t.bumped_at}|${t.posts_count}`;
-        if (day.rp.topics[t.id] === stamp && !must.has(t.id)) continue;
-        must.delete(t.id);
-        day.rp.topics[t.id] = stamp;
-        fresh++;
-        await rpTopic(t);
-        await sleep(RP.gapMs);
+        await sleep(rand(RP.gap));
+        try {
+          // 没领成（credit 没登录、网络错误）就不记成看过，下一轮再来
+          if (!(await rpTopic(t))) continue;
+        } catch (e) {
+          // 被拦就整轮停下退避；帖子被删、没权限看（404 等）就当看过，免得每轮都撞一次
+          if (blocked(e) || !e.status) throw e;
+        }
+        rpTopics[t.id] = Date.now();
+        saveRpTopics();
       }
-      // 推送来的帖子可能不在这个列表里（比如「新」列表已经把它算成看过了），单独看
-      for (const id of must) {
-        if (!cfg.rp.on || needLogin) break;
-        fresh++;
-        await rpTopic({ id });
-        await sleep(RP.gapMs);
-      }
-      saveDay();
-      rpNote = needLogin ? rpNote : `上次扫描 ${new Date().toTimeString().slice(0, 5)}，看了 ${fresh} 个有更新的帖子`;
+      blockedN = 0;
+      const left = all.length - queue.length;
+      if (!needLogin) rpNote = `上次扫描 ${new Date().toTimeString().slice(0, 5)}，看了 ${queue.length} 个新帖` + (left > 0 ? `，还有 ${left} 个下一轮看` : '');
     } catch (e) {
-      rpNote = '扫描出错：' + errMsg(e);
+      if (blocked(e)) {
+        blockedN += 1;
+        const ms = backoffMs(RP.backoff, blockedN);
+        blockedUntil = Date.now() + ms;
+        const until = new Date(blockedUntil).toTimeString().slice(0, 5);
+        rpNote = `被站点拦了（HTTP ${e.status}），${until} 之前不扫`;
+        log(`领红包：被拦（HTTP ${e.status}），${until} 之前不扫`);
+      } else {
+        rpNote = '扫描出错：' + errMsg(e);
+      }
     } finally {
       scanning = false;
       paint();
-      if (rescan) { rescan = false; rpScan(); }
+      if (rescan) { rescan = false; poke(); }
     }
   }
 
   // ---------- 推送：有新帖立刻扫 ----------
   // 列表页那条「查看 N 个新的或更新的话题」蓝条就是站点收到 MessageBus 推送后画的。
   // 这里直接订阅同一个推送，所以开着任意 linux.do 页面都能第一时间知道，不用停在列表页。
-  // /new 的 new_topic = 新帖，立刻扫；/latest = 帖子有新回复或被编辑，同一个帖子 20 秒内只重看一次，
-  // 不然热门红包帖底下一排「谢谢佬」会让它被反复拉取。
+  // 只听 /new 的新帖：每个帖子只看一次，帖子有新回复、被编辑的 /latest 推送用不上，
+  // 听了反而会让一排「谢谢佬」不停触发加扫。
   const rpCategory = () => {
     const m = new URL(cfg.rp.url).pathname.match(/\/c\/(?:[^/]+\/)*?(\d+)(?:\/|$)/);
     return m ? Number(m[1]) : null;
   };
-  const pokedAt = {};
   let pokeTimer = null;
-  function poke(topicId, urgent) {
-    if (!cfg.rp.on || !topicId) return;
-    if (!urgent && Date.now() - (pokedAt[topicId] || 0) < 20000) return;
-    pokedAt[topicId] = Date.now();
-    forced.add(topicId);
-    clearTimeout(pokeTimer);
-    // 稍等一下再扫：同一时刻常常连着来好几条，也给站点一点时间把帖子内容落库
-    pokeTimer = setTimeout(rpScan, urgent ? 1500 : 3000);
+  function poke(topicId) {
+    if (!cfg.rp.on) return;
+    if (topicId) forced.add(topicId);
+    if (pokeTimer) return;   // 已经排上了，这条并进那一轮
+    // 稍等一下再扫，给站点一点时间把帖子内容落库；离上一轮太近就等到隔够 pokeGap，期间的推送并成一轮
+    const wait = Math.max(1500, lastScanAt + RP.pokeGap - Date.now());
+    pokeTimer = setTimeout(() => { pokeTimer = null; rpScan(); }, wait);
   }
   async function subscribeBus() {
     let bus = null;
@@ -656,8 +767,7 @@
       const c = rpCategory();
       return !!(d && d.payload) && (c == null || d.payload.category_id === c);
     };
-    bus.subscribe('/new', (d) => { if (d.message_type === 'new_topic' && hit(d)) poke(d.topic_id, true); });
-    bus.subscribe('/latest', (d) => { if (hit(d)) poke(d.topic_id, false); });
+    bus.subscribe('/new', (d) => { if (d.message_type === 'new_topic' && hit(d)) poke(d.topic_id); });
   }
 
   async function rpTopic(t) {
@@ -668,24 +778,25 @@
     // 只看楼主自己的发言：回复里常有人贴别人的红包链接或已领完的旧链接
     for (const p of posts) {
       if (p.username !== op) continue;
-      await sleep(RP.gapMs);
+      await sleep(rand(RP.gap));
       // raw 是 markdown 原文，藏在 <!-- --> 注释、折叠块里的链接也在里面
-      const raw = await getText(`/raw/${t.id}/${p.post_number}`).catch(() => '');
+      const raw = await getText(`/raw/${t.id}/${p.post_number}`).catch((e) => { if (blocked(e)) throw e; return ''; });
       const d = document.createElement('div');
       d.innerHTML = p.cooked || '';
       const hrefs = [...d.querySelectorAll('a[href]')].map((a) => a.getAttribute('href')).join('\n');
       extract(raw + '\n' + hrefs, 0, out);
     }
     const title = topic.title || t.title || String(t.id);
+    let settled = true;
     for (const id of out.ids) {
       if (seen[id]) continue;
       const r = await claim(id);
-      await sleep(RP.gapMs);
+      await sleep(rand(RP.gap));
       if (r.login) {
         needLogin = true;
         rpNote = '没登录 credit.linux.do：先去 https://credit.linux.do 登录一次，然后刷新本页';
         log('领红包：credit 未登录，暂停');
-        return;
+        return false;
       }
       if (r.ok) {
         seen[id] = 'ok';
@@ -694,6 +805,7 @@
         log(`领到 ${r.amount} LDC：${title}`);
       } else {
         if (r.final) seen[id] = r.msg;
+        else settled = false;
         if (r.msg !== '已领完' && r.msg !== '已经领过') log(`没领到（${r.msg}）：${title}`);
       }
       saveSeen();
@@ -704,13 +816,15 @@
       day.puzzles.length = Math.min(day.puzzles.length, 20);
       saveDay();
     }
+    return settled;
   }
 
   let rpTimer = null;
-  function scheduleRp() {
+  // now = 马上先扫一次（点「启动」/「保存」时）；打开页面时不扫，等第一个间隔或新帖推送
+  function scheduleRp(now) {
     clearInterval(rpTimer);
     if (!cfg.rp.on) return;
-    rpScan();
+    if (now) rpScan();
     rpTimer = setInterval(rpScan, cfg.rp.interval * 1000);
   }
 
@@ -718,17 +832,19 @@
     cfg.rp.on = !cfg.rp.on;
     saveCfg();
     needLogin = false;
+    blockedN = 0;
+    blockedUntil = 0;
     rpNote = '';
     // 手动点启动时把锁让出来，立刻扫一次
     if (cfg.rp.on) ls.set(LOCK_KEY, null);
     paint();
-    scheduleRp();
+    scheduleRp(true);
   };
   const origSave = secRp.saveBtn.onclick;
-  secRp.saveBtn.onclick = () => { origSave(); scheduleRp(); };
+  secRp.saveBtn.onclick = () => { origSave(); scheduleRp(true); };
 
   paint();
   setInterval(readTick, 1000);
-  scheduleRp();
+  scheduleRp(false);
   subscribeBus();
 })();
