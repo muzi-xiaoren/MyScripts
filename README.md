@@ -26,6 +26,7 @@
 | [pt-checkin-cspt](./pt-checkin-cspt) | 1.0.0 | CSPT(财神)：打开页面时自动检测并完成每日签到（`not-attended` 图标变体），未签到则签到后回到 `torrents.php` 并刷新，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-cspt/pt-checkin-cspt.user.js) |
 | [pt-checkin-hdfans](./pt-checkin-hdfans) | 1.0.0 | HDFans：打开页面时自动检测并完成每日签到，未签到则签到后回到 `torrents.php` 并刷新，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-hdfans/pt-checkin-hdfans.user.js) |
 | [pt-checkin-vclib](./pt-checkin-vclib) | 2.0.0 | VC-Lib：打开页面时自动检测并完成每日签到，未签到则去签到页过 Cloudflare 安全验证后签到并回到原来的页面，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-vclib/pt-checkin-vclib.user.js) |
+| [pt-checkin-ptskit](./pt-checkin-ptskit) | 1.0.0 | PTSKit(拾刻)：打开页面时自动检测并完成每日签到，未签到则签到后回到 `torrents.php?tag_id=238` 并刷新，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-ptskit/pt-checkin-ptskit.user.js) |
 | [pt-checkin-bitporn](./pt-checkin-bitporn) | 1.0.0 | BitPorn(UNIT3D)：打开页面时自动领取当月「Daily Reward」日历里今天的奖励（事件 id 按月自动 +1），领完回到 `/trending`，已领则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-bitporn/pt-checkin-bitporn.user.js) |
 | [pt-tangpt-helper](./pt-tangpt-helper) | 1.1.0 | 不可躺(tangpt) 多功能助手，每个功能一个独立开关：① 收件箱批量清理（删所有已读 + 标题以「任务」开头的未读，其余未读保留）② 抽奖结果累计记录（侧边悬浮框，按天持久化，魔力值只记总变化） | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-tangpt-helper/pt-tangpt-helper.user.js) |
 
