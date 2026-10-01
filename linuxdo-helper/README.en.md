@@ -23,7 +23,12 @@ Notes:
 
 Default list: `https://linux.do/c/credit/106/l/new?subset=topics` (积分乐园 · new topics), scanned every 60 s by default (editable next to the URL, minimum 20 s).
 
-**Scans run on a timer**: once when any linux.do page opens or Start is clicked, then every interval (not triggered by topic updates). Each scan looks at the first 30 topics, skipping those with no new replies since the previous scan (topics with new replies, including the author adding packets, are re-read), **only at posts by the topic author** (raw markdown, so links hidden in `<!-- -->` comments are found too), and claims recognised packets via the `credit.linux.do` claim API. Handled forms:
+**When it scans**:
+
+- **Immediately on new topics**: the blue “查看 N 个新的或更新的话题” bar on list pages is drawn by the site when it receives a live push. The script subscribes to the same push, so with **any** linux.do page open (not only the 积分乐园 list) a new topic is checked right away. New replies and edits push too; the same topic is re-checked at most once per 20 s so a row of “thanks” replies doesn't refetch it over and over.
+- **Timer fallback**: once when a page opens or Start is clicked, then every interval, in case the push connection drops.
+
+Each scan looks at the first 30 topics, skipping those with no new replies since the previous scan (unless named by a push), **only at posts by the topic author** (raw markdown, so links hidden in `<!-- -->` comments are found too), and claims recognised packets via the `credit.linux.do` claim API. Handled forms:
 
 | Form | Example |
 | --- | --- |

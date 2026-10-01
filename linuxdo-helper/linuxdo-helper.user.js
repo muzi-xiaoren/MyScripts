@@ -1,13 +1,14 @@
 // ==UserScript==
 // @name         LINUX DO 助手
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      1.0.0
-// @description  linux.do 侧边悬浮框，两个独立开关：① 刷帖：从列表页(默认 /top)从上到下逐个打开帖子，每屏等发言的小蓝点(未读标记)消失再往下滚，读完回列表点下一个 ② 领红包：定时扫积分乐园的新帖，从楼主发言里找出 credit.linux.do 红包(直链 / base64 / base58 / hex / 倒序 / o→0、中文数字等变形)直接领取，需要解谜的列出来留给你。列表地址都能在悬浮框里改。
+// @version      1.1.0
+// @description  linux.do 侧边悬浮框，两个独立开关：① 刷帖：从列表页(默认 /top)从上到下逐个打开帖子，每屏等发言的小蓝点(未读标记)消失再往下滚，读完回列表点下一个 ② 领红包：站点一推送新帖就立刻扫（另有定时兜底）积分乐园的新帖，从楼主发言里找出 credit.linux.do 红包(直链 / base64 / base58 / hex / 倒序 / o→0、中文数字等变形)直接领取，需要解谜的列出来留给你。列表地址都能在悬浮框里改。
 // @author       muzi-xiaoren
 // @match        https://linux.do/*
 // @run-at       document-end
 // @noframes
 // @grant        GM_xmlhttpRequest
+// @grant        unsafeWindow
 // @connect      credit.linux.do
 // @homepageURL  https://github.com/muzi-xiaoren/MyScripts
 // @supportURL   https://github.com/muzi-xiaoren/MyScripts/issues
@@ -514,13 +515,20 @@
   }
 
   let scanning = false;
+  let rescan = false;
   let needLogin = false;
+  // 推送点名的帖子：这一轮不管 bumped_at 有没有变都重看一遍（楼主编辑首帖追加红包不会顶帖）
+  const forced = new Set();
   async function rpScan() {
-    if (!cfg.rp.on || scanning || needLogin || !takeLock()) return;
+    if (!cfg.rp.on || needLogin) return;
+    if (scanning) { rescan = true; return; }
+    if (!takeLock()) return;
     scanning = true;
     try {
       rpNote = '扫描中…';
       paint();
+      const must = new Set(forced);
+      forced.clear();
       const list = await getJSON(listJsonUrl(cfg.rp.url));
       const topics = ((list.topic_list || {}).topics || []).slice(0, RP.scanTopics);
       let fresh = 0;
@@ -528,10 +536,18 @@
         if (!cfg.rp.on || needLogin) break;
         // 帖子没有新回复就不用再看：楼主追加红包也会顶起 bumped_at
         const stamp = `${t.bumped_at}|${t.posts_count}`;
-        if (day.rp.topics[t.id] === stamp) continue;
+        if (day.rp.topics[t.id] === stamp && !must.has(t.id)) continue;
+        must.delete(t.id);
         day.rp.topics[t.id] = stamp;
         fresh++;
         await rpTopic(t);
+        await sleep(RP.gapMs);
+      }
+      // 推送来的帖子可能不在这个列表里（比如「新」列表已经把它算成看过了），单独看
+      for (const id of must) {
+        if (!cfg.rp.on || needLogin) break;
+        fresh++;
+        await rpTopic({ id });
         await sleep(RP.gapMs);
       }
       saveDay();
@@ -541,7 +557,45 @@
     } finally {
       scanning = false;
       paint();
+      if (rescan) { rescan = false; rpScan(); }
     }
+  }
+
+  // ---------- 推送：有新帖立刻扫 ----------
+  // 列表页那条「查看 N 个新的或更新的话题」蓝条就是站点收到 MessageBus 推送后画的。
+  // 这里直接订阅同一个推送，所以开着任意 linux.do 页面都能第一时间知道，不用停在列表页。
+  // /new 的 new_topic = 新帖，立刻扫；/latest = 帖子有新回复或被编辑，同一个帖子 20 秒内只重看一次，
+  // 不然热门红包帖底下一排「谢谢佬」会让它被反复拉取。
+  const W = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
+  const rpCategory = () => {
+    const m = new URL(cfg.rp.url).pathname.match(/\/c\/(?:[^/]+\/)*?(\d+)(?:\/|$)/);
+    return m ? Number(m[1]) : null;
+  };
+  const pokedAt = {};
+  let pokeTimer = null;
+  function poke(topicId, urgent) {
+    if (!cfg.rp.on || !topicId) return;
+    if (!urgent && Date.now() - (pokedAt[topicId] || 0) < 20000) return;
+    pokedAt[topicId] = Date.now();
+    forced.add(topicId);
+    clearTimeout(pokeTimer);
+    // 稍等一下再扫：同一时刻常常连着来好几条，也给站点一点时间把帖子内容落库
+    pokeTimer = setTimeout(rpScan, urgent ? 1500 : 3000);
+  }
+  async function subscribeBus() {
+    let bus = null;
+    for (let i = 0; i < 60 && !bus; i++) {
+      try { bus = W.Discourse.__container__.lookup('service:message-bus'); } catch (e) {}
+      if (!bus) await sleep(500);
+    }
+    if (!bus) { log('没接上站点推送，只按间隔定时扫'); return; }
+    // 列表地址不是某个分类（比如 /latest）就不按分类过滤
+    const hit = (d) => {
+      const c = rpCategory();
+      return !!(d && d.payload) && (c == null || d.payload.category_id === c);
+    };
+    bus.subscribe('/new', (d) => { if (d.message_type === 'new_topic' && hit(d)) poke(d.topic_id, true); });
+    bus.subscribe('/latest', (d) => { if (hit(d)) poke(d.topic_id, false); });
   }
 
   async function rpTopic(t) {
@@ -614,4 +668,5 @@
   paint();
   setInterval(readTick, 1000);
   scheduleRp();
+  subscribeBus();
 })();
