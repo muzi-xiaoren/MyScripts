@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LINUX DO 助手
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      1.2.0
+// @version      1.2.2
 // @description  linux.do 侧边悬浮框，两个独立开关：① 刷帖：从列表页(默认 /top)从上到下逐个打开帖子，每屏等发言的小蓝点(未读标记)消失再往下滚，读完回列表点下一个 ② 领红包：站点一推送新帖就立刻扫（另有定时兜底）积分乐园的新帖，从楼主发言里找出 credit.linux.do 红包(直链 / base64 / base58 / hex / 倒序 / o→0、中文数字等变形)直接领取，需要解谜的列出来留给你。列表地址都能在悬浮框里改。
 // @author       muzi-xiaoren
 // @match        https://linux.do/*
@@ -24,6 +24,9 @@
     stepRatio: 0.7,        // 每次往下滚多少屏
     stepPause: 900,        // 滚完停一下，给站点时间把新进视野的发言挂上计时
     dotTimeout: 20000,     // 一屏的小蓝点最多等这么久，超时就当它不会消失、继续往下
+    nudgeEvery: 4000,      // 等小蓝点时每隔这么久挪 1 像素，让站点重新开始计时
+    flushAfter: 12000,     // 一屏等了这么久还没清掉，就让站点立刻把攒下的阅读时长再报一次
+    leaveWait: 10000,      // 读完离开前最多等这么久，让站点把没报完的阅读时长报完
     bottomRetries: 4,      // 到底后再等几次（每次 1.2s）看有没有加载出更多回复，都没有就算读完
     maxReplies: 300,       // 回复数超过这个的帖子跳过（几千楼的集中帖刷不完）
     hopDelay: 1500,
@@ -43,6 +46,7 @@
   const today = new Date().toLocaleDateString('en-CA');
   const sleep = (ms) => new Promise((s) => setTimeout(s, ms));
   const errMsg = (e) => (e && e.message ? e.message : String(e));
+  const W = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
   const el = (tag, css, props) => Object.assign(Object.assign(document.createElement(tag), props || {}), { style: css });
   const ls = {
     get(k, d) { try { const v = JSON.parse(localStorage.getItem(k) || 'null'); return v == null ? d : v; } catch (e) { return d; } },
@@ -334,19 +338,49 @@
     return n;
   }
 
+  // 站点的阅读计时服务（Discourse screen-track）。上报被拒（比如被 Cloudflare 挡成 403）时站点不重试，
+  // 这几楼又已经算「报过」，要等每 60 秒一次的例行上报才会再带上；赶在这之前跳回列表，它们就永远未读。
+  // flush() 是站点自己的上报，发的是这段时间真实累计的停留时长。
+  function screenTrack() {
+    try { return W.Discourse.__container__.lookup('service:screen-track'); } catch (e) { return null; }
+  }
+  function flushTimings() {
+    const t = screenTrack();
+    try { if (t) t.flush(); } catch (e) {}
+  }
+  async function drainTimings(ms) {
+    flushTimings();
+    const t0 = Date.now();
+    for (;;) {
+      const t = screenTrack();
+      if (!t || (!t._inProgress && !(t._consolidatedTimings || []).length)) return;
+      if (Date.now() - t0 > ms) return;
+      await sleep(300);
+    }
+  }
+
+  function nudge() {
+    const atBottom = innerHeight + scrollY >= document.documentElement.scrollHeight - 1;
+    scrollBy(0, atBottom ? -1 : 1);
+  }
+
   async function readTopic(id) {
     let waited = 0, bottom = 0;
     await waitFor(() => document.querySelector('.topic-post'), 15000);
     while (cfg.read.on && topicIdNow() === id) {
-      // 站点只在标签页在前台、窗口有焦点时计阅读时间，切走了就停下等，否则蓝点永远不会消失
-      if (document.hidden || !document.hasFocus()) {
-        readNote = '标签页不在前台，站点不计阅读，先暂停';
+      // 站点只看页面是否可见（visibilitychange），不管窗口有没有焦点：窗口露在屏幕上、你在用别的程序时照样计时
+      if (document.hidden) {
+        readNote = '标签页不可见，站点不计阅读，先暂停';
         paint();
         await sleep(1000);
         continue;
       }
       const pending = unreadInView();
       if (pending && waited < READ.dotTimeout) {
+        // 原地等时每隔一阵挪 1 像素：站点超过 3 分钟没收到滚动就停止计时（切到后台再回来就是这样），
+        // 新加载出来的楼层也要等下一次滚动才开始计时，不挪的话蓝点会一直等不掉
+        if (waited % READ.nudgeEvery === 0) nudge();
+        if (waited === READ.flushAfter) flushTimings();
         readNote = `等 ${pending} 个小蓝点消失…`;
         paint();
         await sleep(400);
@@ -381,6 +415,10 @@
           day.read.cur = null;
           saveDay();
           log(`刷帖读完：${document.title.replace(/ - LINUX DO$/, '')}`);
+          // 跳回列表是整页刷新，站点内存里还没报出去的阅读时长会被丢掉，先报完再走
+          readNote = '等站点把阅读时长报完…';
+          paint();
+          await drainTimings(READ.leaveWait);
           await sleep(READ.hopDelay);
           if (cfg.read.on) location.href = cfg.read.url;
         }
@@ -583,7 +621,6 @@
   // 这里直接订阅同一个推送，所以开着任意 linux.do 页面都能第一时间知道，不用停在列表页。
   // /new 的 new_topic = 新帖，立刻扫；/latest = 帖子有新回复或被编辑，同一个帖子 20 秒内只重看一次，
   // 不然热门红包帖底下一排「谢谢佬」会让它被反复拉取。
-  const W = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
   const rpCategory = () => {
     const m = new URL(cfg.rp.url).pathname.match(/\/c\/(?:[^/]+\/)*?(\d+)(?:\/|$)/);
     return m ? Number(m[1]) : null;
