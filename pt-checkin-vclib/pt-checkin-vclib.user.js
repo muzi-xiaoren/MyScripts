@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         PT 签到 · VC-Lib
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      1.0.2
-// @description  打开 pt.vclib.online 时自动检测签到状态：未签到就在当前页正中央弹出站点自己的验证码，输满字符即自动完成签到（验证码由你本人识别，脚本不代填）；已签到则什么都不做。
+// @version      2.0.0
+// @description  打开 pt.vclib.online 时自动检测签到状态：未签到就去签到页，等站点的 Cloudflare Turnstile 安全验证放行后提交签到，再回到你原来所在的页面；已签到则什么都不做。
 // @author       muzi-xiaoren
 // @match        https://pt.vclib.online/*
 // @run-at       document-end
@@ -15,189 +15,89 @@
 // @license      MIT
 // ==/UserScript==
 
-// 【为什么这个站不能像别的站那样全自动】
-// VC-Lib 的签到页是 NexusPHP 的经典图形验证码：一张 image.php 生成的扭曲字符图 +
-// 一个 imagestring 输入框 + 一个 imagehash 隐藏域，POST 回 attendance.php 才算签到。
-// 这道题就是用来确认「屏幕前是人」的，脚本去识别它就等于把这道防线拆了——本脚本不做这件事。
-// 能自动的部分全自动：判断今天签没签、把验证码取到你当前页面、提交、回填结果、刷新页面；
-// 唯一留给你的动作是照着图片敲 6 个字符（输满自动提交）。
-
 (function () {
   'use strict';
 
-  // 【配置】签到成功后跳转到的页面。留空 '' 则原地刷新当前页。
+  // 【配置】签到成功后跳转到的页面。留空 '' 则回到被带去签到页之前你所在的那一页。
   const RETURN_TO = '';
-  // 验证码字符数：输满这么多字符就自动提交，不用再按回车（回车照样能提交）。
-  // 站点当前是 6 位；哪天改了长度，把这里改掉即可（改小了也不会卡住，回车兜底）。
-  const CODE_LENGTH = 6;
-  // 验证码图放大倍数 + 滤镜：原图只有 150x40，放大加对比度纯粹是为了让你看清，
-  // 不做任何识别（见文件顶部说明）。
-  const IMAGE_SCALE = 2;
-  const IMAGE_FILTER = 'contrast(1.35) saturate(0.9)';
-  // 网络抗抖：单次请求超时(毫秒) + 失败最多重试次数（线性退避）。
-  const FETCH_TIMEOUT = 8000;
-  const FETCH_TRIES = 3;
+  // 等 Turnstile 发令牌的最长时间(毫秒)。超时就把签到页留给用户手动点。
+  const TOKEN_TIMEOUT = 20000;
+  const TOKEN_POLL = 300;
+  // 一天最多自动尝试几次（令牌过期 / 提交失败时的上限，防止反复跳转）。
+  const MAX_TRIES = 3;
 
+  const ATTENDANCE_PATH = '/attendance.php';
   const DONE_KEY = 'mzx-pter-attendance';
-  const HIDE_KEY = 'mzx-pter-attendance-hidden';
+  const TRY_KEY = 'mzx-pter-attendance-tries';
+  const FROM_KEY = 'mzx-pter-attendance-from';
   const today = new Date().toLocaleDateString('en-CA');
 
-  // NexusPHP 经典签到入口：未签到时顶部是 <a class="faqlink" href="attendance.php">[签到得魔力]</a>，
-  // 签到后 faqlink class 被清空、文字变成「已签到…」。靠这个结构判断，不匹配文字（各站文案不同）。
-  const isPending = (doc) => !!doc.querySelector('a.faqlink[href*="attendance.php"]');
-  if (!isPending(document)) return;                       // 已签到 / 当前页无入口
-  if (localStorage.getItem(DONE_KEY) === today) return;   // 兜底：一天只弹一次
-  if (sessionStorage.getItem(HIDE_KEY) === today) return; // 本次浏览器会话里被你关掉过
+  // 站点顶部横幅在每个页面都有：未签到时是 <a class="faqlink" href="attendance.php">[签到得魔力]</a>，
+  // 签到后 faqlink class 被清空、文字变成「已签到…」。所以靠这个结构判断（各站文案不同，别匹配文字）。
+  const pending = !!document.querySelector('a.faqlink[href*="attendance.php"]');
 
-  async function tryFetch(url, opts) {
-    let lastErr;
-    for (let i = 1; i <= FETCH_TRIES; i++) {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT);
-      try {
-        const r = await fetch(url, Object.assign({ credentials: 'same-origin' }, opts, { signal: ctrl.signal }));
-        clearTimeout(timer);
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        return r;
-      } catch (e) {
-        clearTimeout(timer);
-        lastErr = e;
-        if (i < FETCH_TRIES) await new Promise((s) => setTimeout(s, 800 * i));
+  function markDone() {
+    localStorage.setItem(DONE_KEY, today);
+    localStorage.removeItem(TRY_KEY);
+  }
+
+  function tries() {
+    const raw = localStorage.getItem(TRY_KEY) || '';
+    const [day, n] = raw.split('|');
+    return day === today ? Number(n) || 0 : 0;
+  }
+
+  function bumpTries() {
+    localStorage.setItem(TRY_KEY, today + '|' + (tries() + 1));
+  }
+
+  // 回哪儿：RETURN_TO 优先，否则回到来签到之前的那页。两个都没有（你自己直接打开的签到页）
+  // 就原地不动 —— 不能 reload，签到页已签状态下再 reload 会一直刷自己。
+  function leave() {
+    const from = sessionStorage.getItem(FROM_KEY);
+    sessionStorage.removeItem(FROM_KEY);
+    const target = RETURN_TO || from;
+    if (target && target !== location.href.replace(/#.*$/, '')) location.href = target;
+  }
+
+  // 签到页：站点把原来的图形验证码换成了 Cloudflare Turnstile 小组件，签到表单要带
+  // Turnstile 自己写进隐藏域的 cf-turnstile-response 令牌 POST 过去才算数。
+  // 本脚本不碰验证本身 —— 只是等 Cloudflare 的组件在你自己的浏览器里把令牌发下来，
+  // 令牌到手就提交站点原本的表单；令牌一直不来（说明 Cloudflare 要求人工交互），
+  // 就什么都不做，把页面原样留给你自己点。
+  async function checkInHere() {
+    if (!pending) {         // 已签到（含 POST 成功后的回显页）→ 收工回去
+      markDone();
+      leave();
+      return;
+    }
+    if (tries() >= MAX_TRIES) return;
+
+    const form = document.querySelector('form[action*="attendance.php"]');
+    if (!form) return;
+
+    const deadline = Date.now() + TOKEN_TIMEOUT;
+    while (Date.now() < deadline) {
+      const token = form.querySelector('input[name="cf-turnstile-response"]');
+      if (token && token.value) {
+        bumpTries();
+        form.submit();
+        return;
       }
+      await new Promise((s) => setTimeout(s, TOKEN_POLL));
     }
-    throw lastErr;
   }
 
-  const parse = async (r) => new DOMParser().parseFromString(await r.text(), 'text/html');
-
-  // 取一张新验证码：图片地址和 imagehash 必须来自同一次请求（服务端按 hash 存答案），
-  // 所以「换一张」也是重新拉整个签到页，而不是单独刷图片。
-  async function loadCaptcha() {
-    const doc = await parse(await tryFetch('/attendance.php'));
-    const form = doc.querySelector('form[action*="attendance.php"]');
-    const img = form && form.querySelector('img[src*="image.php"]');
-    const hash = form && form.querySelector('input[name="imagehash"]');
-    if (!img || !hash || !hash.value) return null;
-    return { src: new URL(img.getAttribute('src'), location.origin).href, hash: hash.value };
+  if (location.pathname === ATTENDANCE_PATH) {
+    checkInHere();
+    return;
   }
 
-  // 提交签到。成功与否不看文案，仍然看顶部横幅：返回的页面里签到入口没了就是成功。
-  async function submit(hash, text) {
-    const doc = await parse(await tryFetch('/attendance.php', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ imagehash: hash, imagestring: text }),
-    }));
-    const banner = doc.querySelector('a[href*="attendance.php"]');
-    // 失败时 NexusPHP 回 stdmsg 报错页：<h2>Error</h2> + 一个只装原因的 td.text
-    // （本站文案是「图片代码无效！…」，一个「验证码」都没有）。
-    // 两个坑：整页布局的外层也是 td.text，所以要取最后一个而不是第一个；
-    // 原因也不在 body 文字的开头，那一段全是顶部导航，别去截前几百字符找。
-    const tds = doc.querySelectorAll('td.text');
-    const detail = tds.length > 1 ? tds[tds.length - 1] : null;
-    return {
-      ok: !isPending(doc),
-      note: banner ? banner.textContent.trim() : '',
-      err: detail ? detail.textContent.trim().replace(/\s+/g, ' ') : '',
-    };
-  }
-
-  const el = (tag, css, props) => Object.assign(Object.assign(document.createElement(tag), props || {}), { style: css });
-
-  function panel() {
-    const box = el('div', `position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:2147483000;
-      background:#1f2328;color:#e6edf3;border:1px solid #3d444d;border-radius:12px;
-      padding:16px 18px;font:13px/1.5 system-ui,-apple-system,"PingFang SC",sans-serif;
-      box-shadow:0 12px 48px rgba(0,0,0,.55)`);
-
-    const head = el('div', 'display:flex;align-items:center;justify-content:space-between;gap:24px;margin-bottom:10px');
-    head.appendChild(el('b', 'font-weight:600', { textContent: '今日未签到' }));
-    const close = el('span', 'cursor:pointer;opacity:.6;padding:0 2px;font-size:16px', { textContent: '×', title: '今天不再提醒' });
-    close.onclick = () => { sessionStorage.setItem(HIDE_KEY, today); box.remove(); };
-    head.appendChild(close);
-
-    // 放大用 width/image-rendering 而不是 transform，免得把下面的输入框顶开。
-    const img = el('img', `display:block;width:${150 * IMAGE_SCALE}px;border-radius:6px;background:#fff;
-      cursor:pointer;margin-bottom:10px;filter:${IMAGE_FILTER};image-rendering:auto`,
-      { title: '点击换一张' });
-    const input = el('input', `width:100%;box-sizing:border-box;padding:7px 9px;border-radius:6px;
-      border:1px solid #3d444d;background:#0d1117;color:#e6edf3;
-      font:15px/1.4 ui-monospace,monospace;letter-spacing:2px;text-align:center`,
-      { placeholder: `输入图中 ${CODE_LENGTH} 个字符`, autocomplete: 'off', spellcheck: false });
-    const tip = el('div', 'margin-top:8px;font-size:12px;opacity:.75;min-height:16px;text-align:center');
-
-    box.append(head, img, input, tip);
-    document.body.appendChild(box);
-    return { box, img, input, tip };
-  }
-
-  (async function run() {
-    let cap;
-    try {
-      cap = await loadCaptcha();
-    } catch (e) {
-      return; // 网络失败：不打扰，下次开页面再说
-    }
-    if (!cap) return;
-
-    const ui = panel();
-    ui.img.src = cap.src;
-
-    // 只在你没在输别的东西时才抢焦点，免得打断站内搜索。
-    if (document.activeElement === document.body) ui.input.focus();
-
-    // msg：换图的原因（如「验证码不对」）。换完要把它留在提示区——早先版本在这里
-    // 无条件清空提示，输错验证码时就只是悄悄换一张图，一个字的反馈都没有，
-    // 手感和「输完没反应」一模一样。
-    async function refresh(msg) {
-      ui.tip.textContent = msg ? msg + '，换一张…' : '换一张…';
-      try {
-        const next = await loadCaptcha();
-        if (next) { cap = next; ui.img.src = next.src; }
-        ui.tip.textContent = msg || '';
-        ui.input.value = '';
-        ui.input.focus();
-      } catch (e) {
-        ui.tip.textContent = '取验证码失败，点图片重试';
-      }
-    }
-    // 包一层：onclick 会把 MouseEvent 当成 msg 传进去。
-    ui.img.onclick = () => refresh();
-
-    let busy = false;
-    async function go() {
-      const text = ui.input.value.trim();
-      if (busy || !text) return;
-      busy = true;
-      ui.tip.textContent = '签到中…';
-      try {
-        const res = await submit(cap.hash, text);
-        if (res.ok) {
-          localStorage.setItem(DONE_KEY, today);
-          ui.tip.textContent = res.note || '签到成功';
-          setTimeout(() => {
-            if (RETURN_TO && location.href.replace(/#.*$/, '') !== RETURN_TO) location.href = RETURN_TO;
-            else location.reload();
-          }, 1200);
-          return;
-        }
-        // 多半是验证码看错了：换一张接着来（hash 已被服务端消费，不能重投）。
-        // 认得出就说人话，认不出就把站点原话搬过来——比编一句「签到未成功」有用。
-        await refresh(
-          /图片代码|验证码|captcha|image code/i.test(res.err) ? '验证码不对'
-            : (res.err ? res.err.slice(0, 20) : '签到未成功')
-        );
-      } catch (e) {
-        ui.tip.textContent = '网络失败，回车重试';
-      } finally {
-        busy = false;
-      }
-    }
-
-    // 输满 CODE_LENGTH 位就自动提交；回车始终可用（长度变了 / 粘贴多余字符时的兜底）。
-    ui.input.addEventListener('input', () => {
-      if (ui.input.value.trim().length >= CODE_LENGTH) go();
-    });
-    ui.input.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') go(); });
-  })();
+  // 其它页面：未签到就把浏览器带去签到页。旧版在当前页弹图形验证码、后台 POST 回去，
+  // 站点换成 Turnstile 后那条路断了：Turnstile 的令牌只能由签到页上的组件当场发。
+  if (!pending) return;
+  if (localStorage.getItem(DONE_KEY) === today) return;
+  if (tries() >= MAX_TRIES) return;
+  sessionStorage.setItem(FROM_KEY, location.href.replace(/#.*$/, ''));
+  location.href = location.origin + ATTENDANCE_PATH;
 })();
