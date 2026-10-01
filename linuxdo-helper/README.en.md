@@ -39,7 +39,7 @@ Each scan looks at the first 30 topics, skipping those with no new replies since
 | base64 (whole link or just the id) | `aHR0cHM6Ly9jcmVkaXQubGludXguZG8v…` |
 | base58 / hex / URL-encoding / reversed / ROT13 | decoded and searched again, up to 3 levels |
 
-Puzzles (“replace X with the last digit of my name”, riddles, …) are **not guessed**; they are listed under “要手动解的” in the panel with a link to the topic. Password packets on `hb.unsnow.org` are not credit packets and are ignored.
+Puzzles (“replace X with the last digit of my name”, riddles, …) are **not guessed**; they are listed under “要手动解的” in the panel with a link to the topic; click the ✓ next to one once you’ve handled it and it stays hidden (also on later days). Password packets on `hb.unsnow.org` are not credit packets and are ignored.
 
 Notes:
 

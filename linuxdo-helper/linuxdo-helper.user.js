@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LINUX DO 助手
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      1.1.0
+// @version      1.2.0
 // @description  linux.do 侧边悬浮框，两个独立开关：① 刷帖：从列表页(默认 /top)从上到下逐个打开帖子，每屏等发言的小蓝点(未读标记)消失再往下滚，读完回列表点下一个 ② 领红包：站点一推送新帖就立刻扫（另有定时兜底）积分乐园的新帖，从楼主发言里找出 credit.linux.do 红包(直链 / base64 / base58 / hex / 倒序 / o→0、中文数字等变形)直接领取，需要解谜的列出来留给你。列表地址都能在悬浮框里改。
 // @author       muzi-xiaoren
 // @match        https://linux.do/*
@@ -55,6 +55,7 @@
   const DAY_KEY = 'mzx-linuxdo-day';
   const SEEN_KEY = 'mzx-linuxdo-rp-seen';
   const UI_KEY = 'mzx-linuxdo-ui';
+  const DONE_KEY = 'mzx-linuxdo-puzzle-done';
 
   const cfg = (() => {
     const c = ls.get(CFG_KEY, {});
@@ -87,6 +88,18 @@
     if (keys.length > 3000) for (const k of keys.slice(0, keys.length - 2000)) delete seen[k];
     ls.set(SEEN_KEY, seen);
   };
+
+  // 「要手动解的」里打过勾的帖子 id → 打勾时间。跨天保留：第二天重新扫到同一个帖子也不再列出来。
+  const puzzleDone = ls.get(DONE_KEY, {});
+  function markPuzzleDone(topic) {
+    puzzleDone[topic] = Date.now();
+    const keys = Object.keys(puzzleDone);
+    if (keys.length > 500) for (const k of keys.slice(0, keys.length - 300)) delete puzzleDone[k];
+    ls.set(DONE_KEY, puzzleDone);
+    day.puzzles = day.puzzles.filter((p) => p.topic !== topic);
+    saveDay();
+    paint();
+  }
 
   function log(t) {
     const hh = new Date().toTimeString().slice(0, 5);
@@ -216,11 +229,15 @@
     secRp.status.textContent = `${cfg.rp.on ? '运行中' : '已停止'} · 今天领到 ${day.rp.count} 个，共 ${+day.rp.amount.toFixed(2)} LDC` + (rpNote ? '\n' + rpNote : '');
     puzzleEl.replaceChildren();
     if (day.puzzles.length) {
-      puzzleEl.appendChild(el('div', 'opacity:.8', { textContent: '要手动解的（点开看题）：' }));
+      puzzleEl.appendChild(el('div', 'opacity:.8', { textContent: '要手动解的（点开看题，做完点 ✓ 就不再显示）：' }));
       for (const p of day.puzzles.slice(0, 8)) {
-        puzzleEl.appendChild(el('a', 'display:block;color:#7cc4ff;text-decoration:none', {
-          href: `/t/topic/${p.topic}`, target: '_blank', textContent: `· ${p.title} — ${p.hint}`,
+        const row = el('div', 'display:flex;align-items:flex-start;gap:6px');
+        const ok = el('span', 'flex:none;cursor:pointer;color:#3fb950;padding:0 2px', { textContent: '✓', title: '已经处理了，不再显示' });
+        ok.onclick = () => markPuzzleDone(p.topic);
+        row.append(ok, el('a', 'flex:1;color:#7cc4ff;text-decoration:none', {
+          href: `/t/topic/${p.topic}`, target: '_blank', textContent: `${p.title} — ${p.hint}`,
         }));
+        puzzleEl.appendChild(row);
       }
     }
     logEl.textContent = day.log.join('\n') || '还没有记录。';
@@ -637,7 +654,7 @@
       saveSeen();
       saveDay();
     }
-    if (out.puzzles.size && !out.ids.size && !day.puzzles.some((p) => p.topic === t.id)) {
+    if (out.puzzles.size && !out.ids.size && !puzzleDone[t.id] && !day.puzzles.some((p) => p.topic === t.id)) {
       day.puzzles.unshift({ topic: t.id, title, hint: [...out.puzzles][0] });
       day.puzzles.length = Math.min(day.puzzles.length, 20);
       saveDay();
