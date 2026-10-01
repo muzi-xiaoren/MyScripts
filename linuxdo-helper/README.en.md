@@ -10,14 +10,16 @@ Default list: `https://linux.do/top`. After Start:
 
 1. Go to the list page, pick the first topic from the top that hasn't been opened today, and click it.
 2. Scroll the topic one screen at a time. **Before each scroll, wait until the small blue dots (unread markers) on the posts in view disappear.** A dot that stays for more than 20 s is treated as stuck and skipped.
-3. When the bottom is reached and no more replies load for a few seconds, the topic counts as read; go back to the list and open the next one.
+3. When the bottom is reached and no more replies load for a few seconds, the topic counts as read; rest 10–40 s, then go back to the list in-page (no full reload) and open the next one.
 4. When every topic in the list has been opened (a few more pages are auto-loaded), stop.
 
 Notes:
 
 - The site only counts reading time **while the page is visible**; window focus doesn't matter, so a browser window left visible (e.g. on a second screen) keeps counting while you use other apps. When the tab is switched away, minimised or fully covered, the dots never clear; the script pauses and resumes once the page is visible again.
 - The site stops counting after 3 minutes without a scroll, and doesn't count freshly loaded posts until the next scroll, so while waiting for dots the script nudges the page by 1 px every 4 s to restart the timer.
-- Occasionally a reading upload is rejected (e.g. a Cloudflare 403) and the site waits 60 s before reporting those posts again. When a screen hasn't cleared after 12 s, and before leaving a topic, the script asks the site to report right away (real time on screen) and waits up to 10 s for it to finish, so the full-page jump back to the list doesn't drop unsent reading time.
+- How far each scroll goes, how long it pauses and how long it rests between topics are all random, with an occasional longer pause: a perfectly regular rhythm with back-to-back requests is what Cloudflare most readily flags as a bot.
+- Occasionally a reading upload is rejected (e.g. a Cloudflare 403) and the site waits 60 s before reporting those posts again. When a screen hasn't cleared after 12 s, and before leaving a topic, the script asks the site to report right away (real time on screen) and waits up to 10 s for it to finish.
+- Cloudflare sometimes blocks a single list or topic load, leaving the page empty. That doesn't count as read: the script retries after 30 s, doubling the wait on each further failure (up to 5 min), and skips a topic that fails to open twice. After 4 failures in a row it's most likely waiting for a human check, so the script pauses and tells you: reload the page, pass the check, and it carries on by itself.
 - Topics with more replies than the limit are skipped (logged as “刷帖跳过（回复太多）”). Set the limit in the number box next to the auto-read URL in the panel (default 300, 0 = no limit) and click Save.
 - While running, if you navigate elsewhere yourself, the script won't drag you back; it resumes once you are on the list page again.
 
@@ -27,10 +29,10 @@ Default list: `https://linux.do/c/credit/106/l/new?subset=topics` (积分乐园 
 
 **When it scans**:
 
-- **Immediately on new topics**: the blue “查看 N 个新的或更新的话题” bar on list pages is drawn by the site when it receives a live push. The script subscribes to the same push, so with **any** linux.do page open (not only the 积分乐园 list) a new topic is checked right away. New replies and edits push too; the same topic is re-checked at most once per 20 s so a row of “thanks” replies doesn't refetch it over and over.
-- **Timer fallback**: once when a page opens or Start is clicked, then every interval, in case the push connection drops.
+- **Immediately on new topics**: the blue “查看 N 个新的或更新的话题” bar on list pages is drawn by the site when it receives a live push. The script subscribes to the same push, so with **any** linux.do page open (not only the 积分乐园 list) a new topic is checked right away. A push less than 15 s after the previous scan waits until 15 s have passed, and pushes arriving meanwhile are merged into one scan.
+- **Timer fallback**: every interval, in case the push connection drops. Opening a page doesn't trigger a scan; clicking Start or Save scans right away.
 
-Each scan looks at the first 30 topics, skipping those with no new replies since the previous scan (unless named by a push), **only at posts by the topic author** (raw markdown, so links hidden in `<!-- -->` comments are found too), and claims recognised packets via the `credit.linux.do` claim API. Handled forms:
+Each scan looks at the first 30 topics that **haven't been checked yet**; **every topic is checked once, and only the topic author's posts** (raw markdown, so links hidden in `<!-- -->` comments are found too). New replies or bumps never make a checked topic be checked again. Recognised packets are claimed via the `credit.linux.do` claim API. Handled forms:
 
 | Form | Example |
 | --- | --- |
@@ -49,6 +51,8 @@ Notes:
 - On the first claim Tampermonkey asks whether to allow access to `credit.linux.do`; choose “Always allow”.
 - Before claiming, the packet's detail is checked: empty, already claimed by you, or non-existent ids are never sent a claim.
 - Packet ids that were claimed or definitively rejected (empty, already claimed) are remembered and never requested again; network errors are retried next round.
+- Each scan checks at most 5 new topics and leaves the rest for the next one, with 1.5–2.5 s (random) between requests. If the site blocks a request (403 / 429), the scan stops and waits 1 min, doubling on each further block (up to 10 min).
+- A topic whose packet couldn't be claimed because credit isn't logged in or the network failed isn't marked as checked and is retried next scan.
 - With several linux.do tabs open, only one of them scans.
 
 ## Panel
