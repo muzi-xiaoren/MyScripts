@@ -1,9 +1,10 @@
 // ==UserScript==
 // @name         PT 助手 · 不可躺
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      1.1.0
-// @description  www.tangpt.top 每日流程助手，每一步一个独立开关：① 收件箱清理 ② 一百连抽 + 结果累计 ③ 领取任务(月末领 VIP，平时领苍蝇腿) ④ 签到得魔力 ⑤ 老虎机开转两次 ⑥ 回主页。抽奖与老虎机结果记在侧边悬浮框里，按天持久化。
+// @version      1.2.0
+// @description  www.tangpt.top 每日流程助手，每一步一个独立开关：① 收件箱清理 ② 一百连抽 × 10 轮 + 结果累计 ③ 领取任务(月末领 VIP，平时领苍蝇腿) ④ 签到得魔力 ⑤ 老虎机开转两次 ⑥ 回主页；另外每次打开主页都自动领取红包。抽奖、老虎机、红包结果记在侧边悬浮框里，按天持久化。
 // @author       muzi-xiaoren
+// @match        https://www.tangpt.top/
 // @match        https://www.tangpt.top/index.php*
 // @match        https://www.tangpt.top/messages.php*
 // @match        https://www.tangpt.top/task.php*
@@ -30,6 +31,7 @@
     checkin: true,     // 第四步：签到得魔力
     slot: true,        // 第五步：老虎机开转
     home: true,        // 第六步：回主页
+    redpacket: true,   // 不算流程里的一步：每次打开主页都把能领的红包领掉
   };
 
   // 自动串联：做完一步就自己跳到下一步的页面。关掉则只做当前页面这一步。
@@ -51,8 +53,9 @@
 
   const LOTTERY = {
     drawCount: 100,          // 点哪个按钮：1 / 10 / 20 / 50 / 100
-    maxDrawsPerDay: 10,      // 每天最多抽 drawCount × 这个数（= 1000 抽）。上限是防手滑，
+    maxDrawsPerDay: 10,      // 一天点几轮，即最多抽 drawCount × 这个数（= 1000 抽）。上限是防手滑，
                              // 一次一百连抽就是 200 万魔力，没它刷几次页面就抽空了
+    readyTimeout: 15000,     // 等按钮重新可点的最长时间：站点每轮揭晓动画放完才解禁按钮
   };
 
   const TASK = {
@@ -65,10 +68,14 @@
     gapMs: 1500,            // 两次之间的等待（另外还会尊重服务端返回的冷却时间）
   };
 
+  const REDPACKET = {
+    gapMs: 400,             // 两个红包之间的间隔
+  };
+
   const RESPONSE_TIMEOUT = 30000;
 
   const today = new Date().toLocaleDateString('en-CA');
-  const path = location.pathname;
+  const path = location.pathname === '/' ? '/index.php' : location.pathname;
   const sleep = (ms) => new Promise((s) => setTimeout(s, ms));
   const fmt = (n) => Number(n || 0).toLocaleString('en-US');
   const errMsg = (e) => (e && e.message ? e.message : String(e));
@@ -90,6 +97,8 @@
     bonusNow: null,
     lottery: { draws: 0, cost: 0, comp: 0, bonusWon: 0, bonusAfter: null, items: {} },
     slot: { spins: 0, free: 0, cost: 0, payout: 0, wins: 0, jackpots: 0, balanceAfter: null, combos: {} },
+    redpacket: { count: 0, magic: 0 },
+    taskMsg: '',
   });
 
   function load() {
@@ -97,7 +106,11 @@
       const s = JSON.parse(localStorage.getItem(KEY) || 'null');
       if (!s || s.date !== today) return blank();
       const b = blank();
-      return Object.assign(b, s, { lottery: Object.assign(b.lottery, s.lottery), slot: Object.assign(b.slot, s.slot) });
+      return Object.assign(b, s, {
+        lottery: Object.assign(b.lottery, s.lottery),
+        slot: Object.assign(b.slot, s.slot),
+        redpacket: Object.assign(b.redpacket, s.redpacket),
+      });
     } catch (e) {
       return blank();
     }
@@ -352,8 +365,11 @@
 
   function report() {
     const parts = [];
+    if (st.taskMsg) parts.push('【任务】\n' + st.taskMsg);
     parts.push('【抽奖】\n' + (st.lottery.draws ? lotteryLines() : '今天还没有抽奖记录。'));
     parts.push('【老虎机】\n' + (st.slot.spins ? slotLines() : '今天还没有开转记录。'));
+    const R = st.redpacket;
+    parts.push('【红包】\n' + (R.count ? `领取红包：${fmt(R.count)} 个\n领到魔力值：${fmt(R.magic)}` : '今天还没有领到红包。'));
     return parts.join('\n\n');
   }
 
@@ -380,12 +396,17 @@
   // ---------- 抓站点自己的 $.post ----------
   // 抽奖和老虎机都由站点自己发请求，这里只搭一层旁路读响应，不重实现请求。
   // 认领域靠字段而不靠 URL——带查询串的字符串在浏览器扩展里读不到。
+  // 失败也要转给等待方：站点请求失败时只弹个 layer.alert，不转的话等待方要白等满 RESPONSE_TIMEOUT。
   const waiters = [];
   function dispatch(res) {
     if (!res || typeof res !== 'object') return;
     if (Array.isArray(res.results) && res.draw_count != null) absorbLottery(res);
     else if (res.reels && res.result != null) absorbSlot(res);
-    for (const w of waiters.splice(0)) w(res);
+    for (const w of waiters.splice(0)) w.resolve(res);
+  }
+  function dispatchFail(xhr) {
+    const msg = (xhr && xhr.responseJSON && (xhr.responseJSON.message || xhr.responseJSON.msg)) || '请求失败';
+    for (const w of waiters.splice(0)) w.reject(new Error(msg));
   }
   function tap() {
     const jq = window.jQuery;
@@ -394,7 +415,7 @@
     const orig = jq.post;
     jq.post = function () {
       const p = orig.apply(this, arguments);
-      if (p && typeof p.then === 'function') p.then(dispatch, () => {});
+      if (p && typeof p.then === 'function') p.then(dispatch, dispatchFail);
       return p;
     };
     jq.__mzxTapped = true;
@@ -402,8 +423,19 @@
   }
   const nextResponse = (ms) => new Promise((resolve, reject) => {
     const t = setTimeout(() => reject(new Error('等响应超时')), ms);
-    waiters.push((res) => { clearTimeout(t); resolve(res); });
+    waiters.push({
+      resolve: (res) => { clearTimeout(t); resolve(res); },
+      reject: (e) => { clearTimeout(t); reject(e); },
+    });
   });
+
+  async function until(cond, ms, what) {
+    const deadline = Date.now() + ms;
+    while (!cond()) {
+      if (Date.now() > deadline) throw new Error('等' + what + '超时');
+      await sleep(200);
+    }
+  }
 
   // ---------- fetch 抗抖 ----------
   async function tryFetch(url, opts) {
@@ -467,17 +499,32 @@
       note(`清理完成：已删 ${fmt(del)} 封，保留 ${fmt(keep)} 封`);
     },
 
+    // 一轮一轮点，直到抽满 drawCount × maxDrawsPerDay。早先版本点一下就收工，所以每天只抽了 100。
+    // 每轮之间要等按钮解禁：站点收到响应后还要放 ~0.5 秒揭晓动画，期间按钮是 disabled，
+    // 这时点下去 performDraw 直接 return，一个请求都不发。
+    // 已抽数从 st.lottery.draws 续上，中途刷新页面也只补剩下的轮数；
+    // 站点自己的「今天还可以抽 N 次」更少时以站点为准。
     async lottery() {
-      if (st.lottery.draws >= LOTTERY.drawCount * LOTTERY.maxDrawsPerDay) {
-        note('今天的抽奖已达上限，跳过');
-        return;
-      }
       const b = document.querySelector(`button.omnibot-draw-trigger[data-draw-count="${LOTTERY.drawCount}"]`);
       if (!b) throw new Error(`页面上没有「${LOTTERY.drawCount} 连」按钮`);
-      const wait = nextResponse(RESPONSE_TIMEOUT);
-      b.click();
-      await wait;
-      note(`已抽 ${LOTTERY.drawCount} 连`);
+      const total = LOTTERY.drawCount * LOTTERY.maxDrawsPerDay;
+      const siteLeft = () => {
+        const s = window.qqbotLotteryState;
+        return s && s.dailyDrawRemaining != null ? Number(s.dailyDrawRemaining) : Infinity;
+      };
+      while (st.lottery.draws < total) {
+        if (siteLeft() < LOTTERY.drawCount) {
+          note(`站点今天只剩 ${fmt(siteLeft())} 次，不够一轮 ${LOTTERY.drawCount} 连，停在 ${fmt(st.lottery.draws)} 抽`);
+          return;
+        }
+        await until(() => !b.disabled, LOTTERY.readyTimeout, '抽奖按钮可点');
+        const round = Math.floor(st.lottery.draws / LOTTERY.drawCount) + 1;
+        note(`第 ${round}/${LOTTERY.maxDrawsPerDay} 轮 ${LOTTERY.drawCount} 连…`);
+        const wait = nextResponse(RESPONSE_TIMEOUT);
+        b.click();
+        await wait;
+      }
+      note(`抽奖完成：今天共 ${fmt(st.lottery.draws)} 抽`);
     },
 
     async task() {
@@ -489,12 +536,23 @@
         return c0 && c0.textContent.trim().startsWith(want);
       });
       if (!inp) {
-        note(`没找到可领取的「${want}」（可能已领过）`);
+        st.taskMsg = `没找到可领取的「${want}」（可能已领过）`;
+        save();
+        note(st.taskMsg);
         return;
       }
-      const res = await window.jQuery.post('ajax.php', { action: 'claimTask', exam_id: inp.getAttribute('data-id') });
+      // 照站点自己的「领取」按钮发：exam_id 要包在 params 里一层，并且要按 JSON 解析。
+      // 早先版本把 exam_id 平铺在外层、也没要 JSON —— 服务端不认，返回值又是一段字符串，
+      // 读不出 ret，所以每天都显示「已提交领取」，其实一次也没领上。
+      const res = await window.jQuery.post('ajax.php',
+        { action: 'claimTask', params: { exam_id: inp.getAttribute('data-id') } }, null, 'json');
       const msg = res && res.msg ? String(res.msg).replace(/<[^>]*>/g, '').trim() : '';
-      note(`${last ? '月末' : '日常'}任务「${want}」：${msg || '已提交领取'}`);
+      // 被拒不抛错：资格不够之类的原因重试也没用，抛错只会把后面的签到、老虎机一起卡住。
+      // 结果写进悬浮框常驻的【任务】一栏，跳到别的页面也看得到。
+      const ok = res && Number(res.ret) === 0;
+      st.taskMsg = `${last ? '月末' : '日常'}「${want}」` + (ok ? '已领取' : '领取被拒') + (msg ? '：' + msg : '');
+      save();
+      note(st.taskMsg);
     },
 
     async checkin() {
@@ -564,6 +622,46 @@
     }
   }
 
+  // ---------- 红包 ----------
+  // 主页顶部的红包横幅读的是 /api/redpacket/latest（还能领的红包列表），点「開」发的是
+  // POST /api/redpacket/claim {packet_id}。这里直接走这两个接口，不去点弹窗，免得动画一层层盖住页面。
+  // 领不到的（抢完了 / 自己发的 / 已经领过）服务端会回错误，跳过即可。
+  async function claimRedpackets() {
+    const jq = window.jQuery;
+    if (!jq) return;
+    const api = (method, url, data) => new Promise((resolve, reject) => {
+      jq.ajax({ method, url, data: data || {}, dataType: 'json' })
+        .done(resolve)
+        .fail((xhr) => reject(new Error((xhr.responseJSON && xhr.responseJSON.message) || '请求失败')));
+    });
+    let list;
+    try {
+      list = await api('GET', '/api/redpacket/latest');
+    } catch (e) {
+      return;
+    }
+    if (!list || list.enabled === false) return;
+    const items = list.items || [];
+    if (!items.length) return;
+
+    let got = 0, magic = 0;
+    for (const it of items) {
+      note(`领红包 ${got + 1}/${items.length}…`);
+      try {
+        const res = await api('POST', '/api/redpacket/claim', { packet_id: it.id });
+        got += 1;
+        magic += Number(res.magic_amount) || 0;
+        st.redpacket.count += 1;
+        st.redpacket.magic += Number(res.magic_amount) || 0;
+        if (res.user_bonus_after != null) markBonus(Number(res.user_bonus_after));
+        save();
+        paint();
+      } catch (e) { /* 领不到就跳过 */ }
+      await sleep(REDPACKET.gapMs);
+    }
+    note(`红包：领到 ${fmt(got)} 个，${fmt(magic)} 魔力`);
+  }
+
   // 闸门只管「启不启动」，不管「继不继续」：第四步签到成功后顶部那个入口就没了，
   // 要是每次页面加载都拿它拦一下，第五、六步会被自己刚做完的签到挡死。
   // 所以当天已经动过的流程一律放行。
@@ -571,9 +669,13 @@
   const startedToday = Object.keys(st.done).length > 0 || Object.keys(st.attempts).length > 0;
 
   paint();
-  if (CHAIN.requirePendingCheckin && !startedToday && !checkinPending()) {
-    note('今天已签到，流程不启动');
-  } else {
-    runChain();
-  }
+  (async () => {
+    // 红包先领：流程在主页上的「签到」「回主页」两步做完就会跳走，放后面会被跳转打断。
+    if (FEATURES.redpacket && path === '/index.php') await claimRedpackets();
+    if (CHAIN.requirePendingCheckin && !startedToday && !checkinPending()) {
+      note('今天已签到，流程不启动');
+    } else {
+      runChain();
+    }
+  })();
 })();
