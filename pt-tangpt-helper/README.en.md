@@ -7,30 +7,33 @@ A daily-routine helper for [www.tangpt.top](https://www.tangpt.top/). **One togg
 ```js
 const FEATURES = {
   mailClean: true,   // step 1: inbox cleanup
-  lottery: true,     // step 2: 100-draw + cumulative log
+  lottery: true,     // step 2: 100-draw × 10 rounds + cumulative log
   task: true,        // step 3: claim a task
   checkin: true,     // step 4: daily check-in
   slot: true,        // step 5: slot machine spins
   home: true,        // step 6: back to the homepage
+  redpacket: true,   // not a chain step: claim every available red packet whenever the homepage opens
 };
 ```
 
 Open any supported page and the script works through all six steps, hopping to the next step's page on its own (`CHAIN.enabled = false` disables the chaining and only runs the step belonging to the current page). Progress and results live in a side panel, persisted per day, surviving reloads.
+
+On top of that, **every time the homepage opens** (whether or not the routine runs or today's check-in is done) it first claims every red packet the header banner offers, logging the count and bonus in the panel's 【红包】 block.
 
 ## What the six steps do
 
 | Step | Page | Action |
 | --- | --- | --- |
 | Inbox | `messages.php` | Delete every read message plus unread ones whose subject starts with 「任务」; keep all other unread |
-| Lottery | `omnibot_lottery.php` | Click the 100-draw button, accumulate the results |
-| Task | `task.php` | Claim `VIP` on the last day of the month, otherwise `苍蝇腿` |
+| Lottery | `omnibot_lottery.php` | Click the 100-draw button round after round, 10 rounds (1,000 draws) by default, accumulating the results |
+| Task | `task.php` | Claim `VIP` on the last day of the month, otherwise `苍蝇腿`; the outcome stays in the panel's 【任务】 block |
 | Check-in | `index.php` | Daily check-in for bonus points |
 | Slot | `omnibot_slot.php` | Spin twice, logged in its own section |
 | Home | `index.php` | Back to the homepage, routine done |
 
 ## What the panel records
 
-Lottery and slot each get their own block. Bonus points are tracked as totals only, never per win:
+Task, lottery, slot and red packets each get their own block. Bonus points are tracked as totals only, never per win:
 
 ```
 【抽奖】
@@ -75,7 +78,7 @@ At the top of the script, besides `FEATURES`:
 | `CHAIN.maxAttempts` | `2` | Per-step retry cap, so a failing step can't loop forever |
 | `MAIL.unreadDeletePrefix` | `'任务'` | Unread messages are deleted only with this subject prefix |
 | `LOTTERY.drawCount` | `100` | Which button to press (the site offers 1 / 10 / 20 / 50 / 100) |
-| `LOTTERY.maxDrawsPerDay` | `10` | At most `drawCount × this` draws per day. One 100-draw costs 2,000,000 bonus, so this cap is the footgun guard |
+| `LOTTERY.maxDrawsPerDay` | `10` | Rounds per day, i.e. at most `drawCount × this` draws. One 100-draw costs 2,000,000 bonus, so this cap is the footgun guard. If the site's own "draws left today" is lower, the site wins |
 | `TASK.dailyName` / `monthlyName` | `'苍蝇腿'` / `'VIP'` | Matched against the task-name prefix |
 | `SLOT.spins` | `2` | Slot machine spins |
 
@@ -83,7 +86,9 @@ At the top of the script, besides `FEATURES`:
 
 - **Inbox**: each row carries one `input[name="messages[]"]` (`value` is the message id); read/unread comes from the row's `img` `alt` (`Read`/`Unread` — `title` is the localized string and can't be trusted). Deleting POSTs `messages.php` with `action=moveordel` + `delete` + a batch of `messages[]`. **Pages are walked from the last one backwards**: deleting shifts later messages up, so walking forward would skip whole batches as they cross a page boundary.
 - **Lottery / slot**: both are the site's own `$.post` calls. The script doesn't reimplement the requests — it taps `jQuery.post` and reads the responses, identifying them by fields (`results` + `draw_count` for the lottery, `reels` + `result` for the slot) rather than by URL. The lottery still goes through the site's own button.
-- **Task**: `POST ajax.php {action:'claimTask', exam_id:<data-id>}`, which sidesteps the page's layui confirm dialog.
+  Between rounds it waits for the button to re-enable: after the response arrives the site plays a ~0.5s reveal animation with the button `disabled`, and a click during that sends nothing. 1.1.0 clicked once and marked the step done, which is why only 100 draws happened per day.
+- **Task**: sent exactly like the site's own claim button — `POST ajax.php {action:'claimTask', params:{exam_id:<data-id>}}`, parsed as JSON, success means `ret === 0` — sidestepping the page's layui confirm dialog. 1.1.0 put `exam_id` at the top level and didn't parse JSON, so the server ignored it and the script couldn't read the result: it showed "submitted" every day without ever claiming.
+- **Red packets**: the banner reads `GET /api/redpacket/latest` (packets still claimable) and the 「開」 button sends `POST /api/redpacket/claim {packet_id}`. The script calls those two endpoints directly instead of driving the modal; packets it can't get (all taken / already claimed) come back as errors and are skipped. On the homepage it claims first and only then continues the routine, so the routine's navigation can't cut it short.
 - **Check-in**: on this site the check-in is just a GET to `attendance.php`, no captcha.
 
 The gate governs *starting*, not *continuing*: step 4 removes that header link on success, so re-checking it on every page load would let the just-completed check-in block steps 5 and 6. Any routine that has already made progress today is therefore let through.
