@@ -5,7 +5,7 @@ English · [中文](README.md)
 Automatically does the daily check-in (签到, for magic/bonus points) whenever you open any [mua.xloli.cc](https://mua.xloli.cc/) page:
 
 - **Not checked in yet** → take you to the check-in page `attendance.php`, submit the check-in once the site's Cloudflare security check clears, then go to `special.php`.
-- **Already checked in** → do nothing, no reload.
+- **Already checked in** → do nothing, no reload; opening the check-in page yourself afterwards keeps you there instead of sending you to `special.php`.
 
 ## Install
 
@@ -31,6 +31,6 @@ So 2.0 makes the browser actually walk through the check-in page:
 
 1. On any other page, if the check-in is pending → navigate to `attendance.php` (no more background fetch).
 2. On the check-in page, poll the site's own form for `cf-turnstile-response` and **wait for Cloudflare's own widget to issue the token in your browser**, then submit the site's own form. The script takes no part in the verification itself: if no token arrives within `TOKEN_TIMEOUT` (20s by default) — meaning Cloudflare wants human interaction — it does nothing and leaves the page as-is for you to click "立即签到" yourself.
-3. After a successful POST the header banner flips to "已签到", which the script reads as confirmation → records today's flag → goes to `RETURN_TO`.
+3. After a successful POST the header banner flips to "已签到", which the script reads as confirmation → records today's flag → goes to `RETURN_TO`. Right before submitting, the script leaves a note in this tab's `sessionStorage`; only the result page carrying that note navigates, so a check-in page you open yourself stays put.
 
 Two backstops: a per-day `localStorage` completion flag (at most one automatic check-in per day), and a per-day attempt counter `MAX_TRIES` (3 by default, so an expired token or a failed submit can't cause repeated navigation).
