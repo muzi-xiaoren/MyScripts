@@ -9,17 +9,17 @@ A side panel for [linux.do](https://linux.do/) with two features, each with its 
 Default list: `https://linux.do/top`. After Start:
 
 1. Go to the list page, pick the first topic from the top that hasn't been opened today, and click it.
-2. Scroll the topic one screen at a time. **Before each scroll, wait until the small blue dots (unread markers) on the posts in view disappear.** A dot that stays for more than 20 s is treated as stuck and skipped.
-3. When the bottom is reached and no more replies load for a few seconds, the topic counts as read; rest 10–40 s, then go back to the list in-page (no full reload) and open the next one.
+2. Scroll the topic one screen at a time. **Before each scroll, wait until the small blue dots (unread markers) on the posts in view disappear.** Each screen waits at most 14 s for its dots.
+3. When the bottom is reached and no more replies load for a few seconds, the topic counts as read; rest 6–25 s, then go back to the list in-page (no full reload) and open the next one.
 4. When every topic in the list has been opened (a few more pages are auto-loaded), stop.
 
 Notes:
 
 - The site only counts reading time **while the page is visible**; window focus doesn't matter, so a browser window left visible (e.g. on a second screen) keeps counting while you use other apps. When the tab is switched away, minimised or fully covered, the dots never clear; the script pauses and resumes once the page is visible again.
-- The site stops counting after 3 minutes without a scroll, and doesn't count freshly loaded posts until the next scroll, so while waiting for dots the script nudges the page by 1 px every 4 s to restart the timer.
+- The site stops counting after 3 minutes without a scroll, and doesn't count freshly loaded posts until the next scroll, so while waiting for dots the script nudges the page by 1 px every 3 s to restart the timer.
 - How far each scroll goes, how long it pauses and how long it rests between topics are all random, with an occasional longer pause: a perfectly regular rhythm with back-to-back requests is what Cloudflare most readily flags as a bot.
-- Occasionally a reading upload is rejected (e.g. a Cloudflare 403) and the site waits 60 s before reporting those posts again. When a screen hasn't cleared after 12 s, and before leaving a topic, the script asks the site to report right away (real time on screen) and waits up to 10 s for it to finish.
-- Cloudflare sometimes blocks a single list or topic load, leaving the page empty. That doesn't count as read: the script retries after 30 s, doubling the wait on each further failure (up to 5 min), and skips a topic that fails to open twice. After 4 failures in a row it's most likely waiting for a human check, so the script pauses and tells you: reload the page, pass the check, and it carries on by itself.
+- Occasionally a reading upload is rejected (e.g. a Cloudflare 403) and the site waits 60 s before reporting those posts again. When a screen hasn't cleared after 9 s, and before leaving a topic, the script asks the site to report right away (real time on screen) and waits up to 7 s for it to finish.
+- Cloudflare sometimes blocks a single list or topic load, leaving the page empty. That doesn't count as read: the script retries after 20 s, doubling the wait on each further failure (up to 3 min), and skips a topic that fails to open twice. After 3 failures in a row it's most likely waiting for a human check, so the script pauses and tells you: reload the page, pass the check, and it carries on by itself.
 - Topics with more replies than the limit are skipped (logged as “刷帖跳过（回复太多）”). Set the limit in the number box next to the auto-read URL in the panel (default 300, 0 = no limit) and click Save.
 - While running, if you navigate elsewhere yourself, the script won't drag you back; it resumes once you are on the list page again.
 
