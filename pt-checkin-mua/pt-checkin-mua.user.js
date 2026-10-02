@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         PT 签到 · Mua
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      2.0.0
-// @description  打开 mua.xloli.cc 时自动检测签到状态：未签到就去签到页完成签到并回到指定页面，已签到则什么都不做。适配站点新增的 Cloudflare Turnstile 安全验证。
+// @version      2.0.1
+// @description  打开 mua.xloli.cc 时自动检测签到状态：未签到就去签到页完成签到并回到指定页面，已签到则什么都不做（自己打开签到页也不会被带走）。适配站点新增的 Cloudflare Turnstile 安全验证。
 // @author       muzi-xiaoren
 // @match        https://mua.xloli.cc/*
 // @run-at       document-end
@@ -29,6 +29,9 @@
   const ATTENDANCE_PATH = '/attendance.php';
   const DONE_KEY = 'mzx-pter-attendance';
   const TRY_KEY = 'mzx-pter-attendance-tries';
+  // 脚本自己提交签到表单前记一下，回显页据此判断「这次是脚本签的」才跳回 RETURN_TO。
+  // 用 sessionStorage：只在这个标签页里有效，不会影响你另开的签到页。
+  const SUBMIT_KEY = 'mzx-pter-attendance-submitted';
   const today = new Date().toLocaleDateString('en-CA');
 
   // 站点顶部横幅在每个页面都有：未签到时是 <a class="faqlink" href="attendance.php">[今日签到…]</a>，
@@ -62,9 +65,13 @@
   // 令牌到手就提交站点原本的表单；令牌一直不来（说明 Cloudflare 要求人工交互），
   // 就什么都不做，把页面原样留给你自己点。
   async function checkInHere() {
-    if (!pending) {         // 已签到（含 POST 成功后的回显页）→ 收工回去
+    if (!pending) {
       markDone();
-      leave();
+      // 只有脚本刚提交完的回显页才跳回去；签到后你自己点进签到页就留在这儿
+      if (sessionStorage.getItem(SUBMIT_KEY)) {
+        sessionStorage.removeItem(SUBMIT_KEY);
+        leave();
+      }
       return;
     }
     if (tries() >= MAX_TRIES) return;
@@ -77,6 +84,7 @@
       const token = form.querySelector('input[name="cf-turnstile-response"]');
       if (token && token.value) {
         bumpTries();
+        sessionStorage.setItem(SUBMIT_KEY, '1');
         form.submit();
         return;
       }
