@@ -159,8 +159,8 @@
     <div id="xck-head"><b>igneous 助手</b><span id="xck-min" title="折叠/展开">—</span></div>
     <div id="xck-body">
       <textarea id="xck-in" spellcheck="false" placeholder="粘贴（含 ipb_member_id 与 ipb_pass_hash 即可）：
-ipb_member_id:8973071
-ipb_pass_hash:feba317f...
+ipb_member_id:1234567
+ipb_pass_hash:0123abcd...
 igneous:（可留空）"></textarea>
       <button id="xck-go">填入页面 · 选美国节点 · 取 igneous</button>
       <div id="xck-status"></div>

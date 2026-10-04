@@ -16,8 +16,8 @@
 2. 在文本框粘贴（只要包含 `ipb_member_id` 和 `ipb_pass_hash` 两行即可，`igneous` 可留空）：
 
    ```
-   ipb_member_id:8973071
-   ipb_pass_hash:feba317f5aa71e5db28f63c5402918cd
+   ipb_member_id:1234567
+   ipb_pass_hash:0123456789abcdef0123456789abcdef
    igneous:
    ```
 
@@ -25,8 +25,8 @@
 4. 结果区显示：
 
    ```
-   ipb_member_id:8973071
-   ipb_pass_hash:feba317f5aa71e5db28f63c5402918cd
+   ipb_member_id:1234567
+   ipb_pass_hash:0123456789abcdef0123456789abcdef
    igneous:<页面新生成的值>
    ```
 

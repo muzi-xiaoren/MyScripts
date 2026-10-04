@@ -16,8 +16,8 @@ Install [Tampermonkey](https://www.tampermonkey.net/) first, then [click here to
 2. Paste into the textarea (only `ipb_member_id` and `ipb_pass_hash` are required; `igneous` can be left empty):
 
    ```
-   ipb_member_id:8973071
-   ipb_pass_hash:feba317f5aa71e5db28f63c5402918cd
+   ipb_member_id:1234567
+   ipb_pass_hash:0123456789abcdef0123456789abcdef
    igneous:
    ```
 
@@ -25,8 +25,8 @@ Install [Tampermonkey](https://www.tampermonkey.net/) first, then [click here to
 4. The result area shows:
 
    ```
-   ipb_member_id:8973071
-   ipb_pass_hash:feba317f5aa71e5db28f63c5402918cd
+   ipb_member_id:1234567
+   ipb_pass_hash:0123456789abcdef0123456789abcdef
    igneous:<the value the page just generated>
    ```
 
