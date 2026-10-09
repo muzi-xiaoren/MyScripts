@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         豆影 DouView — 豆瓣 Top250 清爽海报墙
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      1.1.1
+// @version      1.1.2
 // @description  将豆瓣电影 Top250 改为清爽海报墙，隐藏广告，保留原生观影操作，可调整海报大小和卡片间距。
 // @author       muzi-xiaoren
 // @match        https://movie.douban.com/top250*
@@ -209,6 +209,7 @@
       padding: 0;
     }
     .douview .grid_view > li {
+      container-type: inline-size;
       margin: 0;
       padding: 0;
       border: 0;
@@ -497,6 +498,29 @@
     .douview .douview-credits .douview-full-info p:last-child { margin-bottom: 0; }
     .douview .grid_view .bd .douview-actions { padding-top: 8px; }
     .douview .douview-actions a { padding: 6px 10px; }
+    /* 按实际卡片宽度缩放文字，避免窄海报字号过大；上下限保持可读性。 */
+    .douview .grid_view .hd .title:first-child {
+      font-size: clamp(13px, calc(10px + 2.5cqw), 19px);
+      line-height: 1.5; min-height: 3em;
+    }
+    .douview .grid_view .hd .title:not(:first-child),
+    .douview .grid_view .bd .douview-meta,
+    .douview .douview-credits,
+    .douview .douview-credits .douview-full-info p,
+    .douview .grid_view .hd .playable {
+      font-size: clamp(10px, calc(7px + 1.67cqw), 13px); line-height: 1.6;
+    }
+    .douview .grid_view .hd .title:not(:first-child) { height: 1.6em; }
+    .douview .douview-rating { min-height: 1.6em; }
+    .douview .douview-rating .rating_num {
+      font-size: clamp(16px, calc(10px + 3.75cqw), 24px); line-height: 1.5;
+    }
+    .douview .douview-rating .rating_num::before { font-size: .8em; }
+    .douview .douview-rating span:last-child {
+      font-size: clamp(10px, calc(6px + 1.67cqw), 12px);
+    }
+    .douview .douview-actions a { font-size: clamp(11px, calc(6px + 2.5cqw), 15px); }
+    .douview .grid_view .pic em { font-size: clamp(11px, calc(7px + 2.5cqw), 16px); }
     .douview a:focus-visible, .douview button:focus-visible, .douview summary:focus-visible {
       outline: 2px solid var(--dv-green); outline-offset: 3px;
     }
