@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         豆影 DouView — 豆瓣 Top250 清爽海报墙
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      1.1.2
+// @version      1.1.3
 // @description  将豆瓣电影 Top250 改为清爽海报墙，隐藏广告，保留原生观影操作，可调整海报大小和卡片间距。
 // @author       muzi-xiaoren
 // @match        https://movie.douban.com/top250*
@@ -521,6 +521,43 @@
     }
     .douview .douview-actions a { font-size: clamp(11px, calc(6px + 2.5cqw), 15px); }
     .douview .grid_view .pic em { font-size: clamp(11px, calc(7px + 2.5cqw), 16px); }
+    /* C 方案：海报评分叠层，短评直显，详情与原生操作共用一行。 */
+    .douview .grid_view .info { padding: clamp(10px, 4cqw, 14px); gap: 4px; }
+    .douview .grid_view .hd .title:first-child { min-height: 0; }
+    .douview .grid_view .hd .title:not(:first-child) { display: none; }
+    .douview .grid_view .bd { gap: 4px; }
+    .douview .grid_view .pic .douview-rating {
+      position: absolute; right: 10px; bottom: 10px; z-index: 1;
+      margin: 0; min-height: 0; padding: 3px 8px; border-radius: 7px;
+      background: #17291ce8; pointer-events: none;
+    }
+    .douview .grid_view .pic .douview-rating > :not(.rating_num) { display: none; }
+    .douview .grid_view .pic .douview-rating .rating_num {
+      color: #fff; font-size: clamp(14px, calc(8px + 3cqw), 20px); line-height: 1.5;
+    }
+    .douview .grid_view .pic .playable {
+      position: absolute; top: 10px; right: 10px; bottom: auto;
+      margin: 0; padding: 2px 6px; border-radius: 5px; background: #fffffff2;
+      color: var(--dv-green); font-size: clamp(10px, calc(7px + 1.67cqw), 13px);
+    }
+    .douview .grid_view .bd > .quote {
+      display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+      overflow: hidden; min-height: 0; margin: 0; padding: 0;
+      font-size: clamp(11px, calc(7px + 1.67cqw), 13px); line-height: 1.6;
+    }
+    .douview .douview-card-footer {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+      margin-top: auto; padding-top: 4px; order: 3;
+    }
+    .douview .douview-card-footer .douview-credits { flex: 0 0 auto; }
+    .douview .douview-card-footer .douview-credits[open] { flex-basis: 100%; }
+    .douview .douview-card-footer .douview-actions {
+      flex: 1; flex-wrap: nowrap; gap: 4px; min-width: 0; margin: 0; padding: 0;
+    }
+    .douview .douview-card-footer .douview-actions a {
+      flex: 1 1 0; min-width: 0; padding: 4px 3px; box-sizing: border-box;
+      white-space: nowrap; font-size: clamp(10px, calc(6px + 2.5cqw), 14px);
+    }
     .douview a:focus-visible, .douview button:focus-visible, .douview summary:focus-visible {
       outline: 2px solid var(--dv-green); outline-offset: 3px;
     }
@@ -732,8 +769,32 @@
         }
       }
       const quote = item.querySelector('.bd > .quote');
-      if (quote) fullInfo.append(quote);
+      if (quote) {
+        quote.title = quote.textContent.trim();
+        fullInfo.append(quote.cloneNode(true));
+      }
+      const poster = item.querySelector('.pic');
+      const ratingRow = rating?.parentElement;
+      if (poster && ratingRow) {
+        const votes = ratingRow.querySelector('[data-douview-votes]');
+        if (votes) {
+          const voteInfo = document.createElement('p');
+          votes.textContent = votes.dataset.douviewVotes;
+          voteInfo.append(votes);
+          fullInfo.append(voteInfo);
+        }
+        poster.append(ratingRow);
+        const playable = item.querySelector('.hd .playable');
+        if (playable) poster.append(playable);
+      }
+      summary.textContent = '详情';
       credits.append(summary, fullInfo);
+      const cardFooter = document.createElement('div');
+      cardFooter.className = 'douview-card-footer';
+      credits.before(cardFooter);
+      cardFooter.append(credits);
+      const actions = item.querySelector('.douview-actions');
+      if (actions) cardFooter.append(actions);
     });
   }
 
