@@ -11,7 +11,7 @@
 | 脚本 | 版⁠本 | 说明 | 安⁠装 |
 |---|---|---|---|
 | [imdbview](./imdbview) | 1.0.0 | IMDb Top250 清爽海报墙：顶部折叠、悬浮榜单信息、中文片名，保留原生评分和观影状态，大小和间距可调 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/imdbview/imdbview.user.js) |
-| [douview](./douview) | 1.1.4 | 豆瓣 Top250 清爽海报墙：海报评分叠层、原站一句话短评、紧凑电影信息、字号随海报宽度调整、悬停未看筛选、搜索与账号菜单；保留原生观影操作，海报大小和间距可调，每页 25/50/100/250 条 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/douview/douview.user.js) |
+| [douview](./douview) | 1.1.5 | 豆瓣 Top250 清爽海报墙：海报评分叠层、原站一句话短评、紧凑电影信息、字号随海报宽度调整、悬停未看筛选、搜索与账号菜单；保留原生观影操作，海报大小和间距可调，每页 25/50/100/250 条 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/douview/douview.user.js) |
 | [github-pr-tab](./github-pr-tab) | 3.10.0 | GitHub PR/Issue 页面：浏览器标签只显示 `#编号`，并按状态给图标(favicon)上色（已 approve 橙、stacked 非主干 base 灰、冲突红等） | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/github-pr-tab/github-pr-tab.user.js) |
 | [github-repo-visibility-color](./github-repo-visibility-color) | 1.0.0 | GitHub 个人主页/仓库列表：`Public` 徽章变绿、`Private` 变蓝（描边样式，与原生 “Public archive” 一致） | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/github-repo-visibility-color/github-repo-visibility-color.user.js) |
 | [linuxdo-helper](./linuxdo-helper) | 1.4.1 | LINUX DO 侧边悬浮框，两个独立开关：刷帖（从 `/top` 等列表页从上到下逐个打开帖子，每屏等小蓝点消失再滚）、领红包（站点一推送新帖就立刻扫积分乐园，另有定时兜底，识别直链 / base64 / o→0 / 中文数字等变形后自动领取 credit 红包，解谜类列出来留给你）；列表地址在悬浮框里改 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/linuxdo-helper/linuxdo-helper.user.js) |

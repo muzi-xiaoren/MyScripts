@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         豆影 DouView — 豆瓣 Top250 清爽海报墙
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      1.1.4
+// @version      1.1.5
 // @description  将豆瓣电影 Top250 改为清爽海报墙，隐藏广告，保留原生观影操作，可调整海报大小和卡片间距。
 // @author       muzi-xiaoren
 // @match        https://movie.douban.com/top250*
@@ -567,7 +567,8 @@
       border: 1px solid var(--dv-line); border-radius: 8px; padding: 6px 10px;
       background: var(--dv-panel); color: var(--dv-green); font: inherit; cursor: pointer;
     }
-    .douview-page-size [role="status"] { flex-basis: 100%; text-align: center; }
+    .douview-page-size [role="status"] { text-align: center; }
+    .douview-page-size label { white-space: nowrap; }
     .douview a:focus-visible, .douview button:focus-visible, .douview summary:focus-visible {
       outline: 2px solid var(--dv-green); outline-offset: 3px;
     }
@@ -831,11 +832,12 @@
   const nativePaginator = document.querySelector('#content .paginator');
   const pageControls = document.createElement('div');
   pageControls.className = 'douview-page-size';
-  pageControls.innerHTML = '<label>每页 <select aria-label="每页条数"></select> 条</label><span role="status" aria-live="polite"></span><button type="button" hidden>重试加载</button>';
+  pageControls.innerHTML = '<span role="status" aria-live="polite"></span><label>每页 <select aria-label="每页条数"></select> 条</label><button type="button" hidden>重试加载</button>';
   const pageSizeSelect = pageControls.querySelector('select');
   PAGE_SIZES.forEach(size => pageSizeSelect.add(new Option(String(size), String(size))));
   pageSizeSelect.value = String(pageSize);
-  list.after(pageControls);
+  if (nativePaginator) nativePaginator.after(pageControls);
+  else list.after(pageControls);
   const pageStatus = pageControls.querySelector('[role="status"]');
   const retryButton = pageControls.querySelector('button');
   pageSizeSelect.addEventListener('change', () => {
@@ -845,8 +847,7 @@
     if (url.href === location.href) location.reload();
     else location.assign(url.href);
   });
-  if (pageSize === 25) return;
-  if (nativeStart !== pageStart) {
+  if (pageSize > 25 && nativeStart !== pageStart) {
     pageUrl.searchParams.set('start', String(pageStart));
     location.replace(pageUrl.href);
     return;
@@ -867,15 +868,17 @@
   const initialCards = list.querySelectorAll(':scope > li').length;
   const offsets = Array.from(nativePaginator?.querySelectorAll('a[href]') || [])
     .map(link => Number(new URL(link.getAttribute('href'), location.href).searchParams.get('start')) || 0);
-  const countText = nativePaginator?.textContent.match(/共\s*(\d+)\s*部/);
+  const countText = nativePaginator?.textContent.match(/共\s*(\d+)\s*[部条]/);
   const unwatchedCount = filter?.querySelector('input:checked')
     ? filter.textContent.match(/[（(]\s*(\d+)\s*[）)]/) : null;
   let total = Math.min(250, Number(countText?.[1] || unwatchedCount?.[1]) || Math.max(pageStart, ...offsets) + initialCards);
+  pageStatus.textContent = `本页 ${initialCards} 条 · 共 ${total} 条`;
+  if (pageSize === 25) return;
   let nextUrl = nextPageUrl(document, pageStart);
   let loading = false;
   const pagination = document.createElement('div');
   pagination.className = 'paginator douview-pagination';
-  pageControls.after(pagination);
+  pageControls.before(pagination);
   if (nativePaginator) nativePaginator.hidden = true;
 
   function renderPagination() {
