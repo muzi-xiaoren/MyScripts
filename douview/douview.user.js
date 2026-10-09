@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         豆影 DouView — 豆瓣 Top250 清爽海报墙
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      1.1.3
+// @version      1.1.4
 // @description  将豆瓣电影 Top250 改为清爽海报墙，隐藏广告，保留原生观影操作，可调整海报大小和卡片间距。
 // @author       muzi-xiaoren
 // @match        https://movie.douban.com/top250*
@@ -558,6 +558,16 @@
       flex: 1 1 0; min-width: 0; padding: 4px 3px; box-sizing: border-box;
       white-space: nowrap; font-size: clamp(10px, calc(6px + 2.5cqw), 14px);
     }
+    .douview .paginator[hidden] { display: none !important; }
+    .douview-page-size {
+      display: flex; flex-wrap: wrap; justify-content: center; align-items: center;
+      gap: 10px; margin: 24px 0 12px; color: var(--dv-soft); font-size: 12px;
+    }
+    .douview-page-size select, .douview-page-size button {
+      border: 1px solid var(--dv-line); border-radius: 8px; padding: 6px 10px;
+      background: var(--dv-panel); color: var(--dv-green); font: inherit; cursor: pointer;
+    }
+    .douview-page-size [role="status"] { flex-basis: 100%; text-align: center; }
     .douview a:focus-visible, .douview button:focus-visible, .douview summary:focus-visible {
       outline: 2px solid var(--dv-green); outline-offset: 3px;
     }
@@ -810,4 +820,122 @@
   });
   // 只观察卡片内容的变化，不监听样式属性，避免调节外观触发重复处理。
   observer.observe(list, { childList: true, subtree: true });
+
+  // 豆瓣每个响应最多 25 条，顺序读取原分页以组成用户选择的一页。
+  const PAGE_SIZES = [25, 50, 100, 250];
+  const savedPageSize = GM_getValue('douview-page-size', 25);
+  const pageSize = PAGE_SIZES.includes(savedPageSize) ? savedPageSize : 25;
+  const pageUrl = new URL(location.href);
+  const nativeStart = Math.max(0, Number.parseInt(pageUrl.searchParams.get('start'), 10) || 0);
+  const pageStart = Math.floor(nativeStart / pageSize) * pageSize;
+  const nativePaginator = document.querySelector('#content .paginator');
+  const pageControls = document.createElement('div');
+  pageControls.className = 'douview-page-size';
+  pageControls.innerHTML = '<label>每页 <select aria-label="每页条数"></select> 条</label><span role="status" aria-live="polite"></span><button type="button" hidden>重试加载</button>';
+  const pageSizeSelect = pageControls.querySelector('select');
+  PAGE_SIZES.forEach(size => pageSizeSelect.add(new Option(String(size), String(size))));
+  pageSizeSelect.value = String(pageSize);
+  list.after(pageControls);
+  const pageStatus = pageControls.querySelector('[role="status"]');
+  const retryButton = pageControls.querySelector('button');
+  pageSizeSelect.addEventListener('change', () => {
+    GM_setValue('douview-page-size', Number(pageSizeSelect.value));
+    const url = new URL(location.href);
+    url.searchParams.set('start', '0');
+    if (url.href === location.href) location.reload();
+    else location.assign(url.href);
+  });
+  if (pageSize === 25) return;
+  if (nativeStart !== pageStart) {
+    pageUrl.searchParams.set('start', String(pageStart));
+    location.replace(pageUrl.href);
+    return;
+  }
+
+  function nextPageUrl(doc, afterStart) {
+    const candidates = Array.from(doc.querySelectorAll('.paginator a[href]'))
+      .map(link => new URL(link.getAttribute('href'), location.href))
+      .filter(url => url.origin === location.origin && url.pathname === location.pathname)
+      .filter(url => Number(url.searchParams.get('start')) > afterStart)
+      .sort((a, b) => Number(a.searchParams.get('start')) - Number(b.searchParams.get('start')));
+    if (!candidates.length) return null;
+    // 保留当前的未看筛选等参数，只替换原站分页偏移。
+    const next = new URL(location.href);
+    next.searchParams.set('start', candidates[0].searchParams.get('start'));
+    return next;
+  }
+  const initialCards = list.querySelectorAll(':scope > li').length;
+  const offsets = Array.from(nativePaginator?.querySelectorAll('a[href]') || [])
+    .map(link => Number(new URL(link.getAttribute('href'), location.href).searchParams.get('start')) || 0);
+  const countText = nativePaginator?.textContent.match(/共\s*(\d+)\s*部/);
+  const unwatchedCount = filter?.querySelector('input:checked')
+    ? filter.textContent.match(/[（(]\s*(\d+)\s*[）)]/) : null;
+  let total = Math.min(250, Number(countText?.[1] || unwatchedCount?.[1]) || Math.max(pageStart, ...offsets) + initialCards);
+  let nextUrl = nextPageUrl(document, pageStart);
+  let loading = false;
+  const pagination = document.createElement('div');
+  pagination.className = 'paginator douview-pagination';
+  pageControls.after(pagination);
+  if (nativePaginator) nativePaginator.hidden = true;
+
+  function renderPagination() {
+    pagination.replaceChildren();
+    const pages = Math.max(1, Math.ceil(total / pageSize));
+    for (let page = 0; page < pages; page++) {
+      const offset = page * pageSize;
+      const element = document.createElement(offset === pageStart ? 'span' : 'a');
+      element.textContent = String(page + 1);
+      if (offset === pageStart) {
+        element.className = 'thispage';
+        element.setAttribute('aria-current', 'page');
+      } else {
+        const url = new URL(location.href);
+        url.searchParams.set('start', String(offset));
+        element.href = url.href;
+      }
+      pagination.append(element);
+    }
+    pagination.hidden = pages === 1;
+  }
+
+  async function loadPage() {
+    if (loading) return;
+    loading = true;
+    retryButton.hidden = true;
+    renderPagination();
+    try {
+      while (nextUrl && list.querySelectorAll(':scope > li').length < pageSize) {
+        const count = list.querySelectorAll(':scope > li').length;
+        pageStatus.textContent = `正在加载：${count} / ${Math.min(pageSize, total - pageStart)} 条…`;
+        const requestedUrl = nextUrl;
+        const response = await fetch(requestedUrl.href, { credentials: 'same-origin', signal: AbortSignal.timeout(15000) });
+        if (!response.ok || new URL(response.url).pathname !== pageUrl.pathname) throw new Error('分页请求未成功');
+        const doc = new DOMParser().parseFromString(await response.text(), 'text/html');
+        const cards = Array.from(doc.querySelectorAll('#content .grid_view > li'));
+        if (!cards.length) throw new Error('未读取到电影列表');
+        const existing = new Set(Array.from(list.querySelectorAll('.pic a[href]')).map(a => a.getAttribute('href')));
+        const additions = cards.filter(card => !existing.has(card.querySelector('.pic a[href]')?.getAttribute('href')))
+          .slice(0, pageSize - count);
+        if (!additions.length) throw new Error('分页内容重复');
+        const fragment = document.createDocumentFragment();
+        additions.forEach(card => {
+          card.querySelectorAll('script').forEach(script => script.remove());
+          fragment.append(document.importNode(card, true));
+        });
+        list.append(fragment);
+        decorateCards();
+        nextUrl = nextPageUrl(doc, Number(requestedUrl.searchParams.get('start')));
+        if (!nextUrl) total = Number(requestedUrl.searchParams.get('start')) + cards.length;
+      }
+      renderPagination();
+      pageStatus.textContent = `本页 ${list.querySelectorAll(':scope > li').length} 条 · 共 ${total} 条`;
+    } catch (error) {
+      pageStatus.textContent = `已显示 ${list.querySelectorAll(':scope > li').length} 条，其余内容加载失败，可重试。`;
+      retryButton.hidden = false;
+    } finally {
+      loading = false;
+    }
+  }
+  retryButton.addEventListener('click', loadPage);
+  loadPage();
 })();
