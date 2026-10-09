@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         映幕 IMDbView — IMDb Top250 清爽海报墙
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      1.1.1
+// @version      1.1.2
 // @description  IMDb Top250 海报墙：隐藏广告、紧凑布局，保留原生评分、已看和片单操作，海报大小与间距可调。
 // @author       muzi-xiaoren
 // @match        https://www.imdb.com/chart/top*
@@ -36,6 +36,7 @@
   let chromeCollapsed = GM_getValue('imdbview-chrome-collapsed', true) === true;
   let infoCloseTimer;
   let shareAnchor;
+  const actionStyles = new WeakMap();
   const INFO_HEADER = `[data-testid="chart-layout-parent"] > div:has(> ${TITLE})`;
   const INFO_PROGRESS = `${MAIN} > div:has([role="progressbar"])`;
   const TITLE_CACHE_KEY = 'imdbview-chinese-titles';
@@ -448,6 +449,25 @@
     .imdbview ${MAIN} .cli-post-element button {
       width: 28px; height: 28px; min-width: 28px; min-height: 28px; padding: 4px;
     }
+    .imdbview ${MAIN} .cli-title .ipc-title__text { margin: 0; }
+    .imdbview ${MAIN} .iv-chinese-title { padding-right: 34px; line-height: max(1.6em, 28px); }
+    .imdbview ${MAIN} .cli-title-metadata { display: block; width: 100%; box-sizing: border-box; margin: 0; padding: 0; }
+    .imdbview ${MAIN} .cli-children { gap: 2px; }
+    .imdbview ${MAIN} .cli-children > span:last-child { padding-right: 0; }
+    .imdbview ${MAIN} .iv-native-rate,
+    .imdbview ${MAIN} .iv-native-watched,
+    .imdbview ${MAIN} .iv-native-info {
+      position: absolute !important; right: auto; bottom: auto; margin: 0 !important;
+      transform: none !important; z-index: 4;
+    }
+    .imdbview ${MAIN} .iv-native-rate {
+      color: #fff; background: #17291ce8; border: 0; border-radius: 7px;
+      padding: 3px 7px; min-height: 0; height: auto;
+      font-size: clamp(14px, calc(8px + 3cqw), 20px); line-height: 1.5;
+    }
+    .imdbview ${MAIN} .iv-native-rate svg { width: 18px; height: 18px; color: #fff; }
+    .imdbview ${MAIN} .iv-native-watched { padding: 2px 6px; min-height: 24px; }
+    .imdbview ${MAIN} .iv-native-info { width: 28px; height: 28px; }
   `;
   document.head.append(style);
 
@@ -461,6 +481,7 @@
       // 不重复写入文本，否则页面观察器会被设置面板自身的更新持续触发。
       if (output.value !== text) output.value = text;
     });
+    requestAnimationFrame(syncCardActions);
   }
 
   function createSettings(host) {
@@ -655,6 +676,73 @@
     });
   }
 
+  // 只定位原生控件，不移动 React 节点，以保留事件和观影状态更新。
+  function syncCardActions() {
+    if (!document.body.classList.contains('imdbview')) return;
+    const main = document.querySelector(MAIN);
+    if (!main) return;
+    const remember = element => {
+      if (!actionStyles.has(element)) actionStyles.set(element,
+        ['left', 'top', 'padding-bottom', 'min-height'].map(name => [name, element.style.getPropertyValue(name), element.style.getPropertyPriority(name)]));
+    };
+    const place = (element, left, top) => {
+      const parent = element.offsetParent;
+      if (!parent) return;
+      const origin = parent.getBoundingClientRect();
+      element.style.left = `${left - origin.left - parent.clientLeft + parent.scrollLeft}px`;
+      element.style.top = `${top - origin.top - parent.clientTop + parent.scrollTop}px`;
+    };
+    const lastTextRect = element => {
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      const rects = Array.from(range.getClientRects()).filter(rect => rect.width > 0 && rect.height > 0);
+      return rects.at(-1) || element.getBoundingClientRect();
+    };
+    main.querySelectorAll('.cli-parent').forEach(card => {
+      const image = card.querySelector('.ipc-poster__poster-image');
+      const badge = card.querySelector('.iv-poster-rating');
+      const rate = card.querySelector('.cli-ratings-container button, .cli-ratings-container [role="button"]');
+      if (image && badge && rate) {
+        remember(rate);
+        rate.classList.add('iv-native-rate');
+        const rect = image.getBoundingClientRect();
+        const size = rate.getBoundingClientRect();
+        place(rate, rect.right - size.width - 10, rect.bottom - size.height - 10);
+        badge.style.right = `${size.width + 16}px`;
+      }
+      const heading = card.querySelector('.iv-chinese-title') || card.querySelector('.cli-title .ipc-title__text');
+      const info = card.querySelector('.cli-post-element');
+      if (heading && info) {
+        remember(info);
+        info.classList.add('iv-native-info');
+        const text = lastTextRect(heading);
+        const size = info.getBoundingClientRect();
+        const content = card.querySelector('.cli-children').getBoundingClientRect();
+        place(info, Math.min(text.right + 5, content.right - size.width - 10), text.top + (text.height - size.height) / 2);
+      }
+      const metadata = card.querySelector('.cli-title-metadata');
+      const watched = card.querySelector('[data-testid^="inline-watched-button-"]');
+      if (metadata && watched) {
+        remember(watched);
+        remember(metadata);
+        metadata.classList.add('iv-action-metadata');
+        watched.classList.add('iv-native-watched');
+        metadata.style.paddingBottom = '0px';
+        metadata.style.minHeight = '0px';
+        const text = lastTextRect(metadata);
+        const rect = metadata.getBoundingClientRect();
+        const size = watched.getBoundingClientRect();
+        if (text.right + size.width + 8 <= rect.right) {
+          metadata.style.minHeight = `${Math.max(rect.height, size.height)}px`;
+          place(watched, text.right + 8, Math.max(rect.top, text.top + (text.height - size.height) / 2));
+        } else {
+          metadata.style.paddingBottom = `${size.height + 4}px`;
+          place(watched, rect.left, text.bottom + 4);
+        }
+      }
+    });
+  }
+
   function addChineseTitles(main) {
     main.querySelectorAll('.cli-title a[href*="/title/"]').forEach(link => {
       const id = link.getAttribute('href')?.match(/^\/title\/(tt\d+)\//)?.[1];
@@ -778,6 +866,11 @@
       document.getElementById('imdbview-progress')?.remove();
       document.querySelectorAll('.iv-poster-rating').forEach(badge => badge.remove());
       document.querySelectorAll('.iv-overlay-source').forEach(source => source.classList.remove('iv-overlay-source'));
+      document.querySelectorAll('.iv-native-rate, .iv-native-watched, .iv-native-info, .iv-action-metadata').forEach(element => {
+        actionStyles.get(element)?.forEach(([name, value, priority]) => element.style.setProperty(name, value, priority));
+        element.classList.remove('iv-native-rate', 'iv-native-watched', 'iv-native-info', 'iv-action-metadata');
+        actionStyles.delete(element);
+      });
       return;
     }
     const main = document.querySelector(MAIN);
@@ -798,6 +891,7 @@
     syncProgress();
     addChineseTitles(main);
     syncPosterRatings(main);
+    syncCardActions();
 
     // 原紧凑视图最多提供 180px 海报，沿用同一图片标识请求较大版本。
     main.querySelectorAll('.ipc-poster__poster-image img').forEach(img => {
@@ -862,6 +956,7 @@
   // 箭头跟随顶部工具区的边缘；滚出屏幕时回到上沿，仍能找到展开入口。
   window.addEventListener('scroll', positionChromeToggle, { passive: true });
   window.addEventListener('resize', positionChromeToggle);
+  window.addEventListener('resize', () => requestAnimationFrame(syncCardActions));
 
   // IMDb 会在排序、筛选及登录状态变化时重建榜单，合并更新避免反复扫描。
   let scheduled = false;
@@ -876,7 +971,7 @@
   });
   observer.observe(document.body, {
     childList: true, characterData: true, subtree: true,
-    attributes: true, attributeFilter: ['aria-valuenow', 'aria-valuemax'],
+    attributes: true, attributeFilter: ['aria-valuenow', 'aria-valuemax', 'aria-pressed'],
   });
   enhance();
 })();
