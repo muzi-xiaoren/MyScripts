@@ -10,6 +10,7 @@ Each script lives in its own folder with its own README.
 
 | Script | Version | Description | Install |
 |---|---|---|---|
+| [imdbview](./imdbview) | 1.0.0 | IMDb Top250 poster wall with collapsible header, floating chart info, Chinese titles, adjustable spacing, and native rating and watch-state controls | [Install](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/imdbview/imdbview.user.js) |
 | [douview](./douview) | 1.0.0 | Clean poster gallery for Douban Top 250: hide ads, preserve native viewing actions, adjust poster size and spacing | [Install](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/douview/douview.user.js) |
 | [github-pr-tab](./github-pr-tab) | 3.10.0 | GitHub PR/Issue pages: show only `#number` in the browser tab, and color the favicon by status (orange when approved, gray for stacked/non-trunk base, red for conflict, etc.) | [Install](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/github-pr-tab/github-pr-tab.user.js) |
 | [github-repo-visibility-color](./github-repo-visibility-color) | 1.0.0 | GitHub profile / repo list: the `Public` badge turns green and `Private` turns blue (outline style, matching the native “Public archive”) | [Install](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/github-repo-visibility-color/github-repo-visibility-color.user.js) |
