@@ -2,11 +2,12 @@
 
 A light poster wall for IMDb Top 250, following DouView's visual style.
 
-Current version: `1.1.0`.
+Current version: `1.1.1`.
 
 - Adjustable poster width (160–360 px) and card spacing (8–40 px), saved locally.
 - Compact heading and native filters; DouView-style appearance settings open in a viewport-constrained overlay with outside-click and Escape dismissal.
-- Card titles, Chinese labels, metadata, ratings and actions scale with actual card width. Titles use up to two lines, spacing is reduced, and title-info controls no longer overlap watched controls through negative margins.
+- Card titles, Chinese labels, metadata, ratings and actions scale with actual card width. English and Chinese titles occupy separate lines without truncation. Cards use their natural height with tighter spacing instead of stretching to equal row heights.
+- IMDb ratings appear on the lower-right poster corner and follow native score updates; original vote information is retained in the badge description. Native rating and watched controls remain below, with a compact title-info button in the lower-right.
 - The header and chart tools start collapsed and remember the user's choice. The chart title lives in a floating toggle revealed on hover or keyboard focus; touch devices keep it visible.
 - Hovering or focusing the toggle reveals the full native title, share entry, watched progress and appearance settings in an overlay, without shifting posters.
 - Hides chart ads and the sidebar, retaining IMDb navigation, search and account menus.
@@ -23,8 +24,10 @@ An earlier poster-wall revision was tested against the actual IMDb DOM and style
 
 The local preview omits IMDb's application scripts. Live account actions, native filtering/sorting and React updates still require testing after installation on IMDb. No account ratings or watchlists were changed.
 
-Version 1.1.0 passed syntax checking and isolated Chrome checks at 320px, 390px, 768px and 1280px: separated progress labels/bar, live progress-data updates, stable share position and header size, share/settings viewport bounds, Escape and outside dismissal, native watched-node/listener retention, and card font scaling. No runtime errors occurred. The fixture uses modeled IMDb markup and placeholder posters; live IMDb React updates, system clipboard copying and external share destinations remain unverified.
+Version 1.1.1 passed syntax checking and isolated Chrome checks at 320px, 390px, 768px and 1280px: separated progress labels/bar, live progress-data updates, stable share position and header size, share/settings viewport bounds, Escape and outside dismissal, native watched-node/listener retention, and card font scaling. No runtime errors occurred. The fixture uses modeled IMDb markup and placeholder posters; live IMDb React updates, system clipboard copying and external share destinations remain unverified.
 
-Chinese labels are requested anonymously from `query.wikidata.org` in sequential batches of up to 50 public IMDb IDs, with one retry. Results are cached for 30 days (7 days for missing labels). No IMDb login cookies are sent. This feature adds `GM_xmlhttpRequest` and a restricted `@connect` permission and has not been tested yet.
+Chinese labels are requested anonymously from `query.wikidata.org` in sequential batches of up to 50 public IMDb IDs, with one retry. Results are cached for 30 days (7 days for missing labels). No IMDb login cookies are sent. This feature adds `GM_xmlhttpRequest` and a restricted `@connect` permission. Cached Chinese labels have been tested for full-title display; live Wikidata requests remain unverified.
+
+Additional isolated checks for 1.1.1 confirmed unclipped long titles, poster rating display and updates, and native watched-event retention.
 
 MIT · [中文](./README.md)

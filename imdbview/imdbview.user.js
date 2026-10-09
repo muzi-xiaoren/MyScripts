@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         映幕 IMDbView — IMDb Top250 清爽海报墙
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      1.1.0
+// @version      1.1.1
 // @description  IMDb Top250 海报墙：隐藏广告、紧凑布局，保留原生评分、已看和片单操作，海报大小与间距可调。
 // @author       muzi-xiaoren
 // @match        https://www.imdb.com/chart/top*
@@ -409,7 +409,7 @@
     .imdbview ${MAIN} .cli-children { padding: clamp(10px, 4cqw, 14px); gap: 4px; }
     .imdbview ${MAIN} .cli-title .ipc-title__text {
       font-size: clamp(13px, calc(10px + 2.5cqw), 19px); line-height: 1.5;
-      display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+      display: block; -webkit-line-clamp: unset; overflow: visible; max-height: none;
     }
     .imdbview ${MAIN} .iv-chinese-title,
     .imdbview ${MAIN} .cli-title-metadata,
@@ -421,7 +421,33 @@
     .imdbview ${MAIN} [data-testid^="inline-watched-button-"] {
       font-size: clamp(11px, calc(6px + 2.5cqw), 15px); min-height: 28px;
     }
-    .imdbview ${MAIN} .cli-post-element { margin: 0 10px 10px; }
+    .imdbview ${MAIN} > .ipc-metadata-list { align-items: start; }
+    .imdbview ${MAIN} .cli-parent,
+    .imdbview ${MAIN} .ipc-metadata-list-summary-item__c,
+    .imdbview ${MAIN} .ipc-metadata-list-summary-item__tc,
+    .imdbview ${MAIN} .cli-children { height: auto; min-height: 0; }
+    .imdbview ${MAIN} .cli-children { margin: 0; gap: 4px; }
+    .imdbview ${MAIN} .cli-title { height: auto; min-height: 0; max-height: none; overflow: visible; }
+    .imdbview ${MAIN} .iv-chinese-title { display: block; }
+    .imdbview ${MAIN} .iv-chinese-title::before { content: none; }
+    .imdbview ${MAIN} .cli-poster-container { position: relative; }
+    .imdbview ${MAIN} .ipc-poster__poster-image { position: relative; }
+    .imdbview ${MAIN} .iv-poster-rating {
+      position: absolute; right: 10px; bottom: 10px; z-index: 3;
+      border-radius: 7px; padding: 3px 8px; background: #17291ce8; color: #fff;
+      font-size: clamp(14px, calc(8px + 3cqw), 20px); line-height: 1.5;
+      font-weight: 500; pointer-events: none;
+    }
+    .imdbview ${MAIN} .iv-overlay-source { display: none !important; }
+    .imdbview ${MAIN} .cli-ratings-container { display: contents; }
+    .imdbview ${MAIN} .cli-children > span:last-child { padding-right: 36px; }
+    .imdbview ${MAIN} .cli-post-element {
+      position: absolute; right: 10px; bottom: 10px; margin: 0; align-self: auto;
+    }
+    .imdbview ${MAIN} .cli-post-element .ipc-icon-button,
+    .imdbview ${MAIN} .cli-post-element button {
+      width: 28px; height: 28px; min-width: 28px; min-height: 28px; padding: 4px;
+    }
   `;
   document.head.append(style);
 
@@ -607,6 +633,28 @@
     return typeof entry.name === 'string' || entry.name === null ? entry.name : undefined;
   }
 
+  function syncPosterRatings(main) {
+    main.querySelectorAll('.cli-parent').forEach(card => {
+      const poster = card.querySelector('.ipc-poster__poster-image') || card.querySelector('.cli-poster-container');
+      const source = card.querySelector('.cli-ratings-container .ipc-rating-star--imdb')
+        || card.querySelector('.cli-ratings-container .ipc-rating-star');
+      const score = source?.querySelector('.ipc-rating-star--rating')?.textContent.trim()
+        || source?.textContent.match(/\b(?:10|\d)(?:\.\d)?\b/)?.[0];
+      let badge = poster?.querySelector('.iv-poster-rating');
+      if (!poster || !source || !score) { badge?.remove(); source?.classList.remove('iv-overlay-source'); return; }
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'iv-poster-rating';
+        poster.append(badge);
+      }
+      const text = `★ ${score}`;
+      if (badge.textContent !== text) badge.textContent = text;
+      badge.title = source.getAttribute('aria-label') || source.textContent.trim();
+      badge.setAttribute('aria-label', `IMDb 评分 ${score}，${source.textContent.trim()}`);
+      source.classList.add('iv-overlay-source');
+    });
+  }
+
   function addChineseTitles(main) {
     main.querySelectorAll('.cli-title a[href*="/title/"]').forEach(link => {
       const id = link.getAttribute('href')?.match(/^\/title\/(tt\d+)\//)?.[1];
@@ -728,6 +776,8 @@
       document.getElementById('imdbview-chrome-toggle')?.remove();
       document.getElementById('imdbview-share')?.remove();
       document.getElementById('imdbview-progress')?.remove();
+      document.querySelectorAll('.iv-poster-rating').forEach(badge => badge.remove());
+      document.querySelectorAll('.iv-overlay-source').forEach(source => source.classList.remove('iv-overlay-source'));
       return;
     }
     const main = document.querySelector(MAIN);
@@ -747,6 +797,7 @@
     updateChromeToggle();
     syncProgress();
     addChineseTitles(main);
+    syncPosterRatings(main);
 
     // 原紧凑视图最多提供 180px 海报，沿用同一图片标识请求较大版本。
     main.querySelectorAll('.ipc-poster__poster-image img').forEach(img => {
