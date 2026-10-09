@@ -2,12 +2,13 @@
 
 A clean green poster gallery for Douban Movie Top 250.
 
-Current version: `1.1.2`.
+Current version: `1.1.3`.
 
 - Preserves titles, alternate titles, ranks, ratings, vote counts and quotes.
-- Displays complete posters. Titles use up to two lines, original titles truncate to one line, and a compact metadata row shows the year and up to two genres.
+- Displays complete posters. Titles use up to two lines, original titles are kept in Details, no empty title line is reserved, and a compact metadata row shows the year and up to two genres.
 - Titles, ratings, supporting text and action labels scale with the actual card width, within readable minimum and maximum sizes, when poster settings or the viewport change.
-- Ratings share a row with compact vote counts. Full titles, aliases, country/genre metadata, quotes and cast/crew remain available in the expandable Film information section.
+- Layout C places ratings on the lower-right poster corner and availability labels on the upper-right. Native quotes are visible below metadata, up to two lines; hover or open Details for the full text. Missing quotes are not invented.
+- Details and native viewing actions share a compact row. Full titles, aliases, country/genre metadata, quotes, original vote counts and cast/crew remain available in Details.
 - Hides sidebar ads, the app QR promotion and the annual navigation banner.
 - Keeps all viewing actions supplied by Douban, including Want to watch and Watched, without inventing account states or buttons.
 - Preserves availability labels, the unwatched filter, search and pagination.
@@ -27,7 +28,7 @@ The [install link](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main
 
 Only Top 250 and its pagination/filter query parameters are affected. Native movie links and collection actions remain controlled by Douban. Disabling the script and reloading restores the original page. Hiding ads does not block their network requests.
 
-Version 1.1.2 passed JavaScript syntax checking and isolated headless Chrome checks at 320px, 390px, 768px and 1280px: no horizontal overflow, unclipped search buttons, unobstructed navigation overlays within the viewport, hover visibility and native filter clicks, header collapse and expansion, settings overlay boundaries, Escape dismissal, settings writes and reset, expanded full information, retained native nodes/listeners and dynamic multi-action updates. No runtime errors occurred. The fixture models Douban markup with placeholder posters and mocked GM storage. Live checks in the in-app browser and Edge could not complete because browser control reads timed out; real-site CSS compatibility, Tampermonkey reload/pagination persistence and actual collection submissions remain unverified.
+Version 1.1.3 passed JavaScript syntax checking and isolated headless Chrome checks at 320px, 390px, 768px and 1280px: no horizontal overflow, unclipped search buttons, unobstructed navigation overlays within the viewport, hover visibility and native filter clicks, header collapse and expansion, settings overlay boundaries, Escape dismissal, settings writes and reset, expanded full information, retained native nodes/listeners and dynamic multi-action updates. No runtime errors occurred. The fixture models Douban markup with placeholder posters and mocked GM storage. Live checks in the in-app browser and Edge could not complete because browser control reads timed out; real-site CSS compatibility, Tampermonkey reload/pagination persistence and actual collection submissions remain unverified.
 
 Historical 1.0.0 checks covered live posters, availability labels, hidden promotions and the unwatched page's dual-action markup. Earlier isolated checks used original styles and 20 real posters. Those results do not constitute live verification of 1.1.0.
 
