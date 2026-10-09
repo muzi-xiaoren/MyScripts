@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         豆影 DouView — 豆瓣 Top250 清爽海报墙
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      1.1.0
+// @version      1.1.1
 // @description  将豆瓣电影 Top250 改为清爽海报墙，隐藏广告，保留原生观影操作，可调整海报大小和卡片间距。
 // @author       muzi-xiaoren
 // @match        https://movie.douban.com/top250*
@@ -345,10 +345,10 @@
     }
     /* 顶部沿用 IMDbView 的入口与折叠方式，浮层不占海报空间。 */
     .douview.dv-chrome-collapsed #db-nav-movie { display: none; }
-    .douview .douview-toolbar { display: none; }
+    .douview #content h1[hidden] { display: none !important; }
     #douview-chrome-toggle {
       position: fixed; top: 0; left: 50%; transform: translateX(-50%);
-      z-index: 30; padding: 0 16px 10px;
+      z-index: 60; padding: 0 16px 10px;
     }
     #douview-chrome-toggle button {
       display: flex; align-items: center; gap: 10px; height: 28px;
@@ -359,11 +359,105 @@
     }
     #douview-chrome-toggle svg { transition: transform 150ms; }
     .dv-chrome-collapsed #douview-chrome-toggle svg { transform: rotate(180deg); }
-    .douview.dv-info-open .douview-toolbar {
-      display: flex; position: fixed; top: 38px; left: 50%; transform: translateX(-50%);
-      z-index: 31; width: min(540px, calc(100vw - 32px)); box-sizing: border-box;
-      padding: 18px; margin: 0; background: var(--dv-panel); border: 1px solid var(--dv-line);
-      border-radius: 12px; box-shadow: 0 12px 40px #24382d20;
+    #douview-chrome-toggle {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      min-width: 200px; min-height: 32px; padding: 0 12px 8px;
+    }
+    #douview-chrome-toggle > * { opacity: 0; pointer-events: none; transition: opacity 150ms; }
+    #douview-chrome-toggle:hover > *, #douview-chrome-toggle:focus-within > * {
+      opacity: 1; pointer-events: auto;
+    }
+    .douview #douview-chrome-toggle #mine-selector {
+      display: block; margin: 0; padding: 5px 10px; float: none;
+      border: 1px solid var(--dv-line); border-radius: 0 0 9px 9px;
+      background: #fffffff2; font-size: 12px; line-height: 20px; color: var(--dv-green);
+      white-space: nowrap; cursor: pointer;
+    }
+    .douview #mine-selector a { color: var(--dv-green); background: transparent; }
+    #douview-chrome-toggle button { width: 28px; justify-content: center; padding: 0; }
+    .douview #db-nav-movie {
+      position: relative; z-index: 40; overflow: visible; border-bottom: 1px solid var(--dv-line);
+      padding-top: 32px;
+    }
+    .douview #db-nav-movie .nav-wrap, .douview #db-nav-movie .nav-primary {
+      overflow: visible; height: auto;
+    }
+    .douview #db-nav-movie .nav-primary { gap: 12px; padding-block: 16px; }
+    .douview #db-nav-movie .nav-search { flex: 0 1 340px; padding: 0; }
+    .douview #db-nav-movie .nav-search form { width: 100%; }
+    .douview #db-nav-movie .nav-search fieldset {
+      display: flex; align-items: center; margin: 0; padding: 0;
+      border: 1px solid var(--dv-line); border-radius: 10px; overflow: hidden;
+      height: 38px; width: 100%; box-sizing: border-box; background: var(--dv-bg);
+    }
+    .douview #db-nav-movie .nav-search fieldset:focus-within { border-color: #8eb59b; }
+    .douview #db-nav-movie .nav-search .inp {
+      flex: 1; float: none; width: auto; min-width: 0; height: 36px;
+      padding: 0; border: 0; background: transparent; border-radius: 0;
+    }
+    .douview #db-nav-movie #inp-query {
+      height: 36px; padding: 0 12px; border: 0; outline: none; margin: 0;
+      font: 13px/36px -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
+      box-shadow: none;
+    }
+    .douview #db-nav-movie #inp-query::placeholder { color: #89958d; }
+    .douview #db-nav-movie .nav-search .inp-btn {
+      flex: 0 0 52px; float: none; position: static; height: 36px; width: 52px;
+      margin: 0; padding: 0; background: transparent;
+    }
+    .douview #db-nav-movie .nav-search .inp-btn input {
+      display: block; width: 52px; height: 36px; padding: 0; margin: 0;
+      border: 0; border-left: 1px solid var(--dv-line); border-radius: 0;
+      background: transparent; color: var(--dv-green); font-size: 12px; font-weight: 600;
+      text-indent: 0; line-height: 36px;
+    }
+    .douview #db-nav-movie .nav-search .inp-btn input:hover { background: #eaf3ec; }
+    #douview-navigation > summary, #douview-settings > summary {
+      display: flex; align-items: center; gap: 6px; list-style: none;
+      padding: 9px 10px; border: 1px solid var(--dv-line); border-radius: 9px;
+      font-size: 12px; line-height: 18px; color: var(--dv-soft); background: var(--dv-panel);
+      cursor: pointer; white-space: nowrap;
+    }
+    #douview-navigation > summary::-webkit-details-marker,
+    #douview-settings > summary::-webkit-details-marker { display: none; }
+    #douview-navigation > summary::after { content: '⌄'; }
+    #douview-navigation[open] > summary { color: var(--dv-green); background: var(--dv-bg); }
+    .douview-navigation-content {
+      position: fixed; top: var(--dv-menu-top, 72px); left: var(--dv-menu-left, 16px);
+      right: auto; z-index: 100; width: min(420px, calc(100vw - 32px));
+      max-height: calc(100dvh - var(--dv-menu-top, 72px) - 16px); overflow: auto;
+      padding: 18px; text-align: left;
+    }
+    .douview #db-nav-movie .douview-navigation-content #db-global-nav,
+    .douview #db-nav-movie .douview-navigation-content .nav-secondary {
+      position: static; display: block; width: auto; min-width: 0; max-width: 100%;
+      height: auto; margin: 0; padding: 0; border: 0; background: transparent;
+      overflow: visible; box-sizing: border-box;
+    }
+    .douview #db-nav-movie .douview-navigation-content #db-global-nav {
+      padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid var(--dv-line);
+    }
+    .douview .douview-navigation-content #db-global-nav .top-nav-info,
+    .douview .douview-navigation-content #db-global-nav .top-nav-reminder,
+    .douview .douview-navigation-content #db-global-nav .global-nav-items {
+      position: relative; float: none; display: block; margin: 0; padding: 0;
+    }
+    .douview .douview-navigation-content #db-global-nav a {
+      display: inline-block; padding: 4px 8px; line-height: 24px; color: var(--dv-soft);
+    }
+    .douview .douview-navigation-content #db-global-nav ul,
+    .douview .douview-navigation-content .nav-items ul {
+      display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0; padding: 0;
+    }
+    .douview .douview-navigation-content .nav-items a { display: block; padding: 4px 0; }
+    #douview-settings { margin: 0; }
+    @media (max-width: 600px) {
+      .douview #db-nav-movie .nav-search { flex-basis: 100%; order: 4; width: 100%; }
+      .douview #db-nav-movie .nav-search .inp { width: auto; }
+      #douview-navigation { margin-left: auto; }
+    }
+    @media (hover: none) {
+      #douview-chrome-toggle > * { opacity: 1; pointer-events: auto; }
     }
     .douview .grid_view .info { padding: 14px; gap: 6px; }
     .douview .grid_view .hd { margin: 0; position: relative; }
@@ -407,11 +501,10 @@
       outline: 2px solid var(--dv-green); outline-offset: 3px;
     }
     @media (max-width: 600px) {
-      .douview.dv-info-open .douview-toolbar { padding: 14px; gap: 8px; }
       .douview .douview-controls { right: -1px; width: min(300px, calc(100vw - 60px)); }
     }
     @media (prefers-reduced-motion: reduce) {
-      #douview-chrome-toggle svg { transition: none; }
+      #douview-chrome-toggle svg, #douview-chrome-toggle > * { transition: none; }
     }
   `;
   document.head.appendChild(style);
@@ -441,7 +534,7 @@
   const panel = document.createElement('details');
   panel.id = 'douview-settings';
   panel.innerHTML = `
-    <summary>筛选与外观</summary>
+    <summary>外观设置</summary>
     <div class="douview-controls">
       <label class="douview-control">
         <span>海报大小（目标宽度）<output id="douview-width-value" for="douview-width"></output></span>
@@ -455,51 +548,49 @@
     </div>
   `;
   const filter = document.querySelector('#mine-selector');
-  if (filter) {
-    const oldContainer = filter.parentElement;
-    panel.querySelector('.douview-controls').prepend(filter);
-    if (!oldContainer.textContent.trim() && !oldContainer.querySelector('input, a, button')) oldContainer.remove();
-  }
-  const toolbar = document.createElement('div');
-  toolbar.className = 'douview-toolbar';
-  list.before(toolbar);
-  toolbar.append(heading, panel);
+  heading.hidden = true;
+  if (primaryNav) primaryNav.append(panel);
+  else list.before(panel);
 
   let chromeCollapsed = GM_getValue('douview-chrome-collapsed', true) === true;
-  let infoCloseTimer;
   const toggle = document.createElement('div');
   toggle.id = 'douview-chrome-toggle';
-  toggle.innerHTML = '<button type="button" aria-controls="db-nav-movie"><span>豆瓣电影 Top 250</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 15 6-6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>';
+  toggle.innerHTML = '<button type="button" aria-controls="db-nav-movie"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 15 6-6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>';
+  if (filter) {
+    const oldContainer = filter.parentElement;
+    // 原站可能使用 span 包住复选框；用 label 让整段文字都能直接点击。
+    if (!filter.matches('label') && !filter.querySelector('label') && filter.querySelector('input[type="checkbox"]')) {
+      const filterLabel = document.createElement('label');
+      filterLabel.append(...filter.childNodes);
+      filter.append(filterLabel);
+    }
+    toggle.prepend(filter);
+    if (!oldContainer.textContent.trim() && !oldContainer.querySelector('input, a, button')) oldContainer.remove();
+  }
   const toggleButton = toggle.querySelector('button');
   function updateChrome() {
     document.body.classList.toggle('dv-chrome-collapsed', chromeCollapsed);
     toggleButton.setAttribute('aria-expanded', String(!chromeCollapsed));
-    const label = `豆瓣电影 Top 250：${chromeCollapsed ? '展开' : '收起'}搜索、导航与账号`;
+    const label = `${chromeCollapsed ? '展开' : '收起'}搜索、导航与账号`;
     toggleButton.setAttribute('aria-label', label);
-    toggleButton.title = label;
   }
-  function showInfo() {
-    clearTimeout(infoCloseTimer);
-    document.body.classList.add('dv-info-open');
+  function positionNavigation() {
+    if (!navigation.open) return;
+    const anchor = navigation.querySelector('summary').getBoundingClientRect();
+    const menuWidth = Math.min(420, window.innerWidth - 32);
+    const left = Math.max(16, Math.min(anchor.right - menuWidth, window.innerWidth - menuWidth - 16));
+    const top = Math.max(8, Math.min(anchor.bottom + 8, window.innerHeight - 100));
+    navigation.style.setProperty('--dv-menu-left', `${left}px`);
+    navigation.style.setProperty('--dv-menu-top', `${top}px`);
   }
-  function scheduleHideInfo() {
-    clearTimeout(infoCloseTimer);
-    infoCloseTimer = setTimeout(() => {
-      if (panel.open || (document.activeElement?.matches(':focus-visible')
-        && (toolbar.contains(document.activeElement) || toggle.contains(document.activeElement)))) return;
-      document.body.classList.remove('dv-info-open');
-    }, 180);
-  }
-  [toggle, toolbar].forEach(region => {
-    region.addEventListener('pointerenter', showInfo);
-    region.addEventListener('pointerleave', scheduleHideInfo);
-    region.addEventListener('focusin', showInfo);
-    region.addEventListener('focusout', scheduleHideInfo);
-  });
+  navigation.addEventListener('toggle', positionNavigation);
+  window.addEventListener('resize', positionNavigation);
+  window.addEventListener('scroll', positionNavigation, { passive: true });
   toggleButton.addEventListener('click', () => {
     chromeCollapsed = !chromeCollapsed;
+    panel.open = false;
+    navigation.open = false;
     updateChrome();
-    showInfo();
     GM_setValue('douview-chrome-collapsed', chromeCollapsed);
   });
   document.body.append(toggle);
@@ -508,10 +599,6 @@
   const menus = [panel, navigation];
   document.addEventListener('click', event => {
     menus.forEach(menu => { if (!menu.contains(event.target)) menu.open = false; });
-    if (!toolbar.contains(event.target) && !toggle.contains(event.target)) {
-      clearTimeout(infoCloseTimer);
-      document.body.classList.remove('dv-info-open');
-    }
   });
   document.addEventListener('keydown', event => {
     if (event.key !== 'Escape') return;
@@ -521,8 +608,6 @@
       menu.open = false;
       if (restoreFocus) menu.querySelector('summary').focus();
     });
-    if (toolbar.contains(document.activeElement)) toggleButton.focus();
-    document.body.classList.remove('dv-info-open');
   });
   const widthInput = panel.querySelector('#douview-width');
   const gapInput = panel.querySelector('#douview-gap');
