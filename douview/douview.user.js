@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         豆影 DouView — 豆瓣 Top250 清爽海报墙
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      1.0.0
+// @version      1.1.0
 // @description  将豆瓣电影 Top250 改为清爽海报墙，隐藏广告，保留原生观影操作，可调整海报大小和卡片间距。
 // @author       muzi-xiaoren
 // @match        https://movie.douban.com/top250*
@@ -62,7 +62,7 @@
       box-sizing: border-box;
       padding-inline: 32px;
     }
-    .douview #wrapper { margin-top: 18px; }
+    .douview #wrapper { margin-top: 36px; }
     .douview #db-nav-movie, .douview #db-global-nav { min-width: 0; }
     .douview #db-global-nav .global-nav-items ul { display: flex; flex-wrap: wrap; }
     .douview #db-global-nav .global-nav-items li { float: none; }
@@ -343,6 +343,76 @@
       .douview .douview-actions a, #douview-reset { min-height: 44px; box-sizing: border-box; }
       .douview-control input { min-height: 44px; }
     }
+    /* 顶部沿用 IMDbView 的入口与折叠方式，浮层不占海报空间。 */
+    .douview.dv-chrome-collapsed #db-nav-movie { display: none; }
+    .douview .douview-toolbar { display: none; }
+    #douview-chrome-toggle {
+      position: fixed; top: 0; left: 50%; transform: translateX(-50%);
+      z-index: 30; padding: 0 16px 10px;
+    }
+    #douview-chrome-toggle button {
+      display: flex; align-items: center; gap: 10px; height: 28px;
+      padding: 0 12px; border: 1px solid var(--dv-line); border-radius: 0 0 9px 9px;
+      background: #fffffff2; color: var(--dv-green); cursor: pointer;
+      font-family: inherit; font-size: 12px; font-weight: 500; line-height: 1.4;
+      box-shadow: 0 2px 8px #24382d12;
+    }
+    #douview-chrome-toggle svg { transition: transform 150ms; }
+    .dv-chrome-collapsed #douview-chrome-toggle svg { transform: rotate(180deg); }
+    .douview.dv-info-open .douview-toolbar {
+      display: flex; position: fixed; top: 38px; left: 50%; transform: translateX(-50%);
+      z-index: 31; width: min(540px, calc(100vw - 32px)); box-sizing: border-box;
+      padding: 18px; margin: 0; background: var(--dv-panel); border: 1px solid var(--dv-line);
+      border-radius: 12px; box-shadow: 0 12px 40px #24382d20;
+    }
+    .douview .grid_view .info { padding: 14px; gap: 6px; }
+    .douview .grid_view .hd { margin: 0; position: relative; }
+    .douview .grid_view .hd .title:first-child {
+      display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+      overflow: hidden; min-height: 48px; font-size: 16px; line-height: 24px; font-weight: 600;
+    }
+    .douview .grid_view .hd .title:not(:first-child) {
+      display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      height: 18px; margin-top: 2px; font-size: 11px; line-height: 18px;
+    }
+    .douview .grid_view .hd .other { display: none; }
+    .douview .grid_view .hd .playable {
+      position: absolute; bottom: calc(100% + 26px); right: 0; margin: 0;
+      background: #fffffff2; border: 1px solid #e3e9e4; padding: 2px 7px;
+    }
+    .douview .grid_view .bd { gap: 8px; }
+    .douview .grid_view .bd .douview-meta {
+      margin: 0; font-size: 11px; line-height: 18px; white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis;
+    }
+    .douview .douview-rating { margin: 0; gap: 8px; min-height: 28px; }
+    .douview .douview-rating .rating_num { font-size: 19px; line-height: 28px; }
+    .douview .douview-rating span:last-child { font-size: 10px; }
+    .douview .grid_view .bd > .quote { display: none; }
+    .douview .douview-credits { order: 2; margin: 0; font-size: 11px; }
+    .douview .douview-credits > summary {
+      width: fit-content; padding: 3px 0; color: var(--dv-soft); cursor: pointer;
+    }
+    .douview .douview-credits[open] > summary { color: var(--dv-green); }
+    .douview .douview-credits .douview-full-info {
+      padding: 10px; margin-top: 6px; border-radius: 8px; background: var(--dv-bg);
+    }
+    .douview .douview-credits .douview-full-info p {
+      margin: 0 0 8px; font-size: 11px; overflow-wrap: anywhere;
+    }
+    .douview .douview-credits .douview-full-info p:last-child { margin-bottom: 0; }
+    .douview .grid_view .bd .douview-actions { padding-top: 8px; }
+    .douview .douview-actions a { padding: 6px 10px; }
+    .douview a:focus-visible, .douview button:focus-visible, .douview summary:focus-visible {
+      outline: 2px solid var(--dv-green); outline-offset: 3px;
+    }
+    @media (max-width: 600px) {
+      .douview.dv-info-open .douview-toolbar { padding: 14px; gap: 8px; }
+      .douview .douview-controls { right: -1px; width: min(300px, calc(100vw - 60px)); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #douview-chrome-toggle svg { transition: none; }
+    }
   `;
   document.head.appendChild(style);
   document.body.classList.add('douview');
@@ -395,9 +465,53 @@
   list.before(toolbar);
   toolbar.append(heading, panel);
 
+  let chromeCollapsed = GM_getValue('douview-chrome-collapsed', true) === true;
+  let infoCloseTimer;
+  const toggle = document.createElement('div');
+  toggle.id = 'douview-chrome-toggle';
+  toggle.innerHTML = '<button type="button" aria-controls="db-nav-movie"><span>豆瓣电影 Top 250</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 15 6-6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>';
+  const toggleButton = toggle.querySelector('button');
+  function updateChrome() {
+    document.body.classList.toggle('dv-chrome-collapsed', chromeCollapsed);
+    toggleButton.setAttribute('aria-expanded', String(!chromeCollapsed));
+    const label = `豆瓣电影 Top 250：${chromeCollapsed ? '展开' : '收起'}搜索、导航与账号`;
+    toggleButton.setAttribute('aria-label', label);
+    toggleButton.title = label;
+  }
+  function showInfo() {
+    clearTimeout(infoCloseTimer);
+    document.body.classList.add('dv-info-open');
+  }
+  function scheduleHideInfo() {
+    clearTimeout(infoCloseTimer);
+    infoCloseTimer = setTimeout(() => {
+      if (panel.open || (document.activeElement?.matches(':focus-visible')
+        && (toolbar.contains(document.activeElement) || toggle.contains(document.activeElement)))) return;
+      document.body.classList.remove('dv-info-open');
+    }, 180);
+  }
+  [toggle, toolbar].forEach(region => {
+    region.addEventListener('pointerenter', showInfo);
+    region.addEventListener('pointerleave', scheduleHideInfo);
+    region.addEventListener('focusin', showInfo);
+    region.addEventListener('focusout', scheduleHideInfo);
+  });
+  toggleButton.addEventListener('click', () => {
+    chromeCollapsed = !chromeCollapsed;
+    updateChrome();
+    showInfo();
+    GM_setValue('douview-chrome-collapsed', chromeCollapsed);
+  });
+  document.body.append(toggle);
+  updateChrome();
+
   const menus = [panel, navigation];
   document.addEventListener('click', event => {
     menus.forEach(menu => { if (!menu.contains(event.target)) menu.open = false; });
+    if (!toolbar.contains(event.target) && !toggle.contains(event.target)) {
+      clearTimeout(infoCloseTimer);
+      document.body.classList.remove('dv-info-open');
+    }
   });
   document.addEventListener('keydown', event => {
     if (event.key !== 'Escape') return;
@@ -407,6 +521,8 @@
       menu.open = false;
       if (restoreFocus) menu.querySelector('summary').focus();
     });
+    if (toolbar.contains(document.activeElement)) toggleButton.focus();
+    document.body.classList.remove('dv-info-open');
   });
   const widthInput = panel.querySelector('#douview-width');
   const gapInput = panel.querySelector('#douview-gap');
@@ -437,7 +553,20 @@
   function decorateCards() {
     list.querySelectorAll('.item').forEach(item => {
       const rating = item.querySelector('.rating_num');
-      if (rating) rating.parentElement.classList.add('douview-rating');
+      if (rating) {
+        rating.parentElement.classList.add('douview-rating');
+        const votes = rating.parentElement.querySelector('span:last-child');
+        if (votes && votes !== rating && !votes.dataset.douviewVotes) {
+          const original = votes.textContent.trim();
+          const count = original.match(/^(\d+)人评价$/)?.[1];
+          if (count) {
+            votes.dataset.douviewVotes = original;
+            votes.title = original;
+            votes.textContent = Number(count) >= 10000
+              ? `${(Number(count) / 10000).toFixed(1)}万评价` : original;
+          }
+        }
+      }
 
       // 保留原节点和事件；豆瓣更新收藏区域时，也重新识别所有原生操作。
       item.querySelectorAll('.gact').forEach(action => {
@@ -447,11 +576,11 @@
 
       if (item.dataset.douviewDecorated) return;
       item.dataset.douviewDecorated = 'true';
-      const description = item.querySelector('.bd > p');
+      const description = item.querySelector('.bd > p:not(.quote):not(.douview-actions)');
       const lineBreak = description?.querySelector('br');
       if (!lineBreak) return;
 
-      // 年份/地区/类型默认可见，演职员原文收进展开区，避免小卡片挤成一团。
+      // 简短年份与类型留在卡片，完整信息保存在可展开区域。
       const metadata = document.createElement('p');
       metadata.className = 'douview-meta';
       let node = lineBreak.nextSibling;
@@ -461,12 +590,41 @@
         node = next;
       }
       lineBreak.remove();
+      const fullMetadata = metadata.textContent.replace(/\s+/g, ' ').trim();
+      const parts = fullMetadata.split(/\s*\/\s*/);
+      const year = parts[0]?.match(/\b\d{4}\b/)?.[0];
+      const genres = parts.length >= 3 ? parts.slice(2).join(' / ').trim().split(/\s+/).slice(0, 2).join(' · ') : '';
+      metadata.title = fullMetadata;
+      metadata.textContent = year && genres ? `${year} · ${genres}` : fullMetadata;
       const credits = document.createElement('details');
       credits.className = 'douview-credits';
       const summary = document.createElement('summary');
-      summary.textContent = '演职员信息';
+      summary.textContent = '影片信息';
       description.before(metadata, credits);
-      credits.append(summary, description);
+      const fullInfo = document.createElement('div');
+      fullInfo.className = 'douview-full-info';
+      const fullMeta = document.createElement('p');
+      fullMeta.textContent = fullMetadata;
+      fullInfo.append(fullMeta, description);
+      const titleLink = item.querySelector('.hd a');
+      if (titleLink) {
+        titleLink.title = titleLink.textContent.replace(/\s+/g, ' ').trim();
+        const originalTitle = titleLink.querySelector('.title:not(:first-child)');
+        if (originalTitle) originalTitle.textContent = originalTitle.textContent.replace(/^\s*\/\s*/, '').trim();
+        const fullTitle = document.createElement('p');
+        fullTitle.textContent = Array.from(titleLink.querySelectorAll('.title'))
+          .map(node => node.textContent.trim()).filter(Boolean).join(' · ');
+        fullInfo.prepend(fullTitle);
+        const aliases = titleLink.querySelector('.other');
+        if (aliases) {
+          const aliasText = document.createElement('p');
+          aliasText.textContent = `别名：${aliases.textContent.replace(/^\s*\/\s*/, '').trim()}`;
+          fullTitle.after(aliasText);
+        }
+      }
+      const quote = item.querySelector('.bd > .quote');
+      if (quote) fullInfo.append(quote);
+      credits.append(summary, fullInfo);
     });
   }
 
