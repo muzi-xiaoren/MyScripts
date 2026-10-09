@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         映幕 IMDbView — IMDb Top250 清爽海报墙
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      1.0.0
+// @version      1.1.0
 // @description  IMDb Top250 海报墙：隐藏广告、紧凑布局，保留原生评分、已看和片单操作，海报大小与间距可调。
 // @author       muzi-xiaoren
 // @match        https://www.imdb.com/chart/top*
@@ -35,6 +35,7 @@
   const TITLE = '[data-testid="chart-layout-sidebar-title-container"]';
   let chromeCollapsed = GM_getValue('imdbview-chrome-collapsed', true) === true;
   let infoCloseTimer;
+  let shareAnchor;
   const INFO_HEADER = `[data-testid="chart-layout-parent"] > div:has(> ${TITLE})`;
   const INFO_PROGRESS = `${MAIN} > div:has([role="progressbar"])`;
   const TITLE_CACHE_KEY = 'imdbview-chinese-titles';
@@ -87,22 +88,12 @@
       transform: translateX(-50%);
       width: min(620px, calc(100vw - 32px));
       box-sizing: border-box;
-      padding: 16px 16px 64px;
+      padding: 16px;
       z-index: 31;
       background: var(--iv-panel);
       border: 1px solid var(--iv-line);
       border-radius: 12px;
       box-shadow: 0 12px 40px #24382d20;
-    }
-    .imdbview.iv-info-open ${INFO_PROGRESS} {
-      display: block !important;
-      position: fixed;
-      top: var(--iv-info-progress-top);
-      left: 50%;
-      transform: translateX(-50%);
-      width: min(586px, calc(100vw - 66px));
-      max-width: none;
-      z-index: 32;
     }
     .imdbview.iv-info-open ${TITLE} { flex-wrap: wrap; margin: 0; }
     #imdbview-chrome-toggle {
@@ -374,9 +365,63 @@
     @media (max-width: 600px) {
       .imdbview main > .ipc-page-content-container { padding-inline: 16px; }
       .imdbview ${TITLE} .ipc-title__text { font-size: 18px; }
-      .imdbview ${TITLE} [data-testid="share-button"] { display: none; }
       .imdbview ${MAIN} { gap: 8px; }
     }
+    .imdbview.iv-info-open ${INFO_HEADER} {
+      left: max(16px, calc((100vw - 620px) / 2)); transform: none;
+    }
+    .imdbview ${TITLE} .ipc-title__text { font-size: 18px; line-height: 1.4; }
+    .imdbview ${TITLE} > .ipc-title { min-width: 0; }
+    .imdbview ${TITLE} [data-testid="share-button"] {
+      display: inline-flex; width: 36px; height: 36px; min-width: 36px;
+      padding: 8px; color: var(--iv-soft); border-radius: 9px;
+    }
+    #imdbview-settings > summary { padding: 9px 10px; font-size: 12px; line-height: 18px; }
+    #imdbview-settings label > span { display: flex; justify-content: space-between; gap: 12px; }
+    #imdbview-settings output { float: none; }
+    #imdbview-settings .iv-panel {
+      position: fixed; left: var(--iv-settings-left, 16px); top: var(--iv-settings-top, 72px);
+      right: auto; max-height: calc(100dvh - var(--iv-settings-top, 72px) - 16px); overflow: auto;
+    }
+    #imdbview-progress { margin-top: 12px; color: var(--iv-soft); font-size: 12px; }
+    #imdbview-progress .iv-progress-labels {
+      display: flex; justify-content: space-between; gap: 12px; line-height: 20px;
+    }
+    #imdbview-progress .iv-progress-track {
+      height: 4px; margin-top: 8px; overflow: hidden; border-radius: 4px; background: var(--iv-line);
+    }
+    #imdbview-progress .iv-progress-fill { height: 100%; background: var(--iv-green); }
+    #imdbview-share {
+      position: fixed; z-index: 100; width: min(220px, calc(100vw - 32px));
+      box-sizing: border-box; padding: 6px; background: var(--iv-panel);
+      border: 1px solid var(--iv-line); border-radius: 12px; box-shadow: 0 12px 36px #24382d18;
+      font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    #imdbview-share[hidden] { display: none; }
+    #imdbview-share a, #imdbview-share button {
+      display: block; width: 100%; box-sizing: border-box; padding: 9px 12px;
+      border: 0; border-radius: 7px; background: transparent; color: var(--iv-ink);
+      font: inherit; text-align: left; text-decoration: none; cursor: pointer;
+    }
+    #imdbview-share a:hover, #imdbview-share button:hover { background: var(--iv-bg); color: var(--iv-green); }
+    #imdbview-share :focus-visible { outline: 2px solid var(--iv-green); outline-offset: -2px; }
+    .imdbview ${MAIN} > .ipc-metadata-list > .ipc-metadata-list-summary-item { container-type: inline-size; }
+    .imdbview ${MAIN} .cli-children { padding: clamp(10px, 4cqw, 14px); gap: 4px; }
+    .imdbview ${MAIN} .cli-title .ipc-title__text {
+      font-size: clamp(13px, calc(10px + 2.5cqw), 19px); line-height: 1.5;
+      display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+    }
+    .imdbview ${MAIN} .iv-chinese-title,
+    .imdbview ${MAIN} .cli-title-metadata,
+    .imdbview ${MAIN} .ipc-rating-star--voteCount {
+      font-size: clamp(10px, calc(7px + 1.67cqw), 13px); line-height: 1.6;
+    }
+    .imdbview ${MAIN} .ipc-rating-star { font-size: clamp(12px, calc(8px + 2.5cqw), 18px); }
+    .imdbview ${MAIN} .cli-children > span { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px; }
+    .imdbview ${MAIN} [data-testid^="inline-watched-button-"] {
+      font-size: clamp(11px, calc(6px + 2.5cqw), 15px); min-height: 28px;
+    }
+    .imdbview ${MAIN} .cli-post-element { margin: 0 10px 10px; }
   `;
   document.head.append(style);
 
@@ -385,7 +430,7 @@
     document.body.style.setProperty('--iv-gap', `${settings.gap}px`);
     document.querySelectorAll('#imdbview-settings input').forEach(input => {
       input.value = settings[input.name];
-      const output = input.nextElementSibling;
+      const output = input.closest('label').querySelector('output');
       const text = `${settings[input.name]} px`;
       // 不重复写入文本，否则页面观察器会被设置面板自身的更新持续触发。
       if (output.value !== text) output.value = text;
@@ -398,8 +443,8 @@
     menu.innerHTML = `
       <summary>外观设置</summary>
       <div class="iv-panel">
-        <label>海报宽度<input aria-label="海报宽度" name="posterWidth" type="range" min="160" max="360" step="10"><output></output></label>
-        <label>卡片间距<input aria-label="卡片间距" name="gap" type="range" min="8" max="40" step="2"><output></output></label>
+        <label><span>海报大小（目标宽度）<output></output></span><input aria-label="海报宽度" name="posterWidth" type="range" min="160" max="360" step="10"></label>
+        <label><span>卡片间距<output></output></span><input aria-label="卡片间距" name="gap" type="range" min="8" max="40" step="2"></label>
         <button type="button">恢复默认</button>
       </div>`;
     menu.addEventListener('input', event => {
@@ -415,7 +460,18 @@
       applySettings();
       GM_setValue(STORAGE_KEY, { ...settings });
     });
+    menu.addEventListener('toggle', positionSettings);
     host.append(menu);
+  }
+
+  function positionSettings() {
+    const menu = document.getElementById('imdbview-settings');
+    if (!menu?.open) return;
+    const anchor = menu.querySelector('summary').getBoundingClientRect();
+    const panel = menu.querySelector('.iv-panel');
+    const width = Math.min(300, innerWidth - 32);
+    menu.style.setProperty('--iv-settings-left', `${Math.max(16, Math.min(anchor.right - width, innerWidth - width - 16))}px`);
+    menu.style.setProperty('--iv-settings-top', `${Math.max(8, Math.min(anchor.bottom + 8, innerHeight - panel.offsetHeight - 16))}px`);
   }
 
   function positionChromeToggle() {
@@ -423,11 +479,81 @@
     if (!list) return;
     const top = chromeCollapsed ? 0 : Math.max(0, list.getBoundingClientRect().top - 30);
     document.body.style.setProperty('--iv-toggle-top', `${top}px`);
+    positionShare();
+    positionSettings();
+  }
+
+  function syncProgress() {
+    const native = document.querySelector(INFO_PROGRESS);
     const header = document.querySelector(INFO_HEADER);
-    if (header && document.body.classList.contains('iv-info-open')) {
-      const progressTop = header.getBoundingClientRect().bottom - 46;
-      document.body.style.setProperty('--iv-info-progress-top', `${progressTop}px`);
+    if (!native || !header) { document.getElementById('imdbview-progress')?.remove(); return; }
+    const text = native.querySelector('[data-testid="watched-progress-text-wrapper"]')?.textContent.trim() || '';
+    const counts = text.match(/(\d+)\s*(?:of|\/)\s*(\d+)/i);
+    const bar = native.querySelector('[role="progressbar"]');
+    const max = Number(bar?.getAttribute('aria-valuemax')) || 100;
+    const now = bar?.getAttribute('aria-valuenow');
+    const percent = counts && Number(counts[2]) > 0 ? Number(counts[1]) / Number(counts[2]) * 100
+      : now !== null && now !== undefined ? Number(now) / max * 100 : NaN;
+    if (!Number.isFinite(percent)) { document.getElementById('imdbview-progress')?.remove(); return; }
+    let progress = document.getElementById('imdbview-progress');
+    if (!progress) {
+      progress = document.createElement('div');
+      progress.id = 'imdbview-progress';
+      progress.innerHTML = '<div class="iv-progress-labels"><span></span><span></span></div><div class="iv-progress-track" role="progressbar" aria-label="观看进度" aria-valuemin="0" aria-valuemax="100"><div class="iv-progress-fill"></div></div>';
+      header.append(progress);
     }
+    const value = Math.min(100, Math.max(0, percent));
+    const labels = progress.querySelectorAll('.iv-progress-labels span');
+    const label = counts ? `已看 ${counts[1]} / ${counts[2]} 部` : text || '观看进度';
+    if (labels[0].textContent !== label) labels[0].textContent = label;
+    const percentText = `${Math.round(value)}%`;
+    if (labels[1].textContent !== percentText) labels[1].textContent = percentText;
+    progress.querySelector('[role="progressbar"]').setAttribute('aria-valuenow', String(value));
+    progress.querySelector('.iv-progress-fill').style.width = `${value}%`;
+  }
+
+  function positionShare() {
+    const menu = document.getElementById('imdbview-share');
+    if (!menu || menu.hidden) return;
+    if (!shareAnchor?.isConnected) { closeShare(); return; }
+    const rect = shareAnchor.getBoundingClientRect();
+    const width = Math.min(220, innerWidth - 32);
+    const height = menu.offsetHeight;
+    menu.style.left = `${Math.max(16, Math.min(rect.right - width, innerWidth - width - 16))}px`;
+    menu.style.top = `${Math.max(8, Math.min(rect.bottom + 8, innerHeight - height - 16))}px`;
+  }
+
+  function closeShare() {
+    const menu = document.getElementById('imdbview-share');
+    if (menu) menu.hidden = true;
+    shareAnchor?.setAttribute('aria-expanded', 'false');
+    scheduleHideChartInfo();
+  }
+
+  function toggleShare(anchor) {
+    let menu = document.getElementById('imdbview-share');
+    if (menu && !menu.hidden) { closeShare(); return; }
+    shareAnchor = anchor;
+    if (!menu) {
+      menu = document.createElement('div');
+      menu.id = 'imdbview-share';
+      menu.setAttribute('aria-label', '分享榜单');
+      menu.innerHTML = '<a data-share="facebook" target="_blank" rel="noopener noreferrer">Facebook</a><a data-share="twitter" target="_blank" rel="noopener noreferrer">X / Twitter</a><a data-share="email">邮件分享</a><button type="button">复制链接</button>';
+      menu.querySelector('button').addEventListener('click', async event => {
+        try { await navigator.clipboard.writeText(location.href); event.target.textContent = '已复制'; }
+        catch { event.target.textContent = '复制失败，请手动复制地址'; }
+      });
+      document.body.append(menu);
+    }
+    const url = encodeURIComponent(location.href);
+    menu.querySelector('[data-share="facebook"]').href = `https://www.facebook.com/sharer/sharer.php?u=${url}`;
+    menu.querySelector('[data-share="twitter"]').href = `https://twitter.com/intent/tweet?url=${url}`;
+    menu.querySelector('[data-share="email"]').href = `mailto:?subject=IMDb%20Top%20250&body=${url}`;
+    menu.querySelector('button').textContent = '复制链接';
+    anchor.setAttribute('aria-expanded', 'true');
+    menu.hidden = false;
+    showChartInfo();
+    positionShare();
   }
 
   function showChartInfo() {
@@ -443,6 +569,7 @@
       const regions = `#imdbview-chrome-toggle, ${INFO_HEADER}, ${INFO_PROGRESS}`;
       if (document.activeElement?.matches(':focus-visible') && document.activeElement.closest(regions)) return;
       if (document.getElementById('imdbview-settings')?.open) return;
+      if (document.getElementById('imdbview-share')?.hidden === false) return;
       document.body.classList.remove('iv-info-open');
     }, 180);
   }
@@ -465,6 +592,7 @@
     control.innerHTML = `<button type="button"><span>IMDb Top 250</span><svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 15 6-6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`;
     control.querySelector('button').addEventListener('click', () => {
       chromeCollapsed = !chromeCollapsed;
+      closeShare();
       document.getElementById('imdbview-settings')?.removeAttribute('open');
       updateChromeToggle();
       GM_setValue('imdbview-chrome-collapsed', chromeCollapsed);
@@ -504,6 +632,7 @@
       translation.title = '中文片名 · Wikidata';
       translation.textContent = name;
       if (!existing) heading.append(translation);
+      heading.title = `${originalName} · ${name}`;
     });
     if (!loadingTitles && pendingTitles.size) void loadChineseTitles();
   }
@@ -597,6 +726,8 @@
       document.body.classList.remove('iv-info-open');
       document.getElementById('imdbview-settings')?.remove();
       document.getElementById('imdbview-chrome-toggle')?.remove();
+      document.getElementById('imdbview-share')?.remove();
+      document.getElementById('imdbview-progress')?.remove();
       return;
     }
     const main = document.querySelector(MAIN);
@@ -614,6 +745,7 @@
     if (!document.getElementById('imdbview-chrome-toggle')) createChromeToggle();
     applySettings();
     updateChromeToggle();
+    syncProgress();
     addChineseTitles(main);
 
     // 原紧凑视图最多提供 180px 海报，沿用同一图片标识请求较大版本。
@@ -635,12 +767,26 @@
   }
 
   document.addEventListener('click', event => {
+    if (!document.body.classList.contains('imdbview')) return;
+    const anchor = event.target instanceof Element ? event.target.closest(`${TITLE} [data-testid="share-button"]`) : null;
+    if (anchor) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      toggleShare(anchor);
+    }
+  }, true);
+  document.addEventListener('click', event => {
     const menu = document.getElementById('imdbview-settings');
     if (menu?.open && !menu.contains(event.target)) menu.open = false;
+    const share = document.getElementById('imdbview-share');
+    if (share && !share.contains(event.target)) closeShare();
   });
   document.addEventListener('keydown', event => {
     const menu = document.getElementById('imdbview-settings');
-    if (event.key === 'Escape' && menu?.open) {
+    if (event.key === 'Escape' && document.getElementById('imdbview-share')?.hidden === false) {
+      closeShare();
+      shareAnchor?.focus();
+    } else if (event.key === 'Escape' && menu?.open) {
       menu.open = false;
       menu.querySelector('summary').focus();
     } else if (event.key === 'Escape') {
@@ -668,7 +814,8 @@
 
   // IMDb 会在排序、筛选及登录状态变化时重建榜单，合并更新避免反复扫描。
   let scheduled = false;
-  const observer = new MutationObserver(() => {
+  const observer = new MutationObserver(records => {
+    if (records.every(record => record.type === 'attributes' && record.target.closest('#imdbview-progress'))) return;
     if (scheduled) return;
     scheduled = true;
     requestAnimationFrame(() => {
@@ -676,6 +823,9 @@
       enhance();
     });
   });
-  observer.observe(document.body, { childList: true, subtree: true });
+  observer.observe(document.body, {
+    childList: true, characterData: true, subtree: true,
+    attributes: true, attributeFilter: ['aria-valuenow', 'aria-valuemax'],
+  });
   enhance();
 })();
