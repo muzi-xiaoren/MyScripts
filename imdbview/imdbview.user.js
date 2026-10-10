@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         映幕 IMDbView — IMDb Top250 清爽海报墙
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      1.1.5
-// @description  IMDb Top250 海报墙：隐藏广告、紧凑布局，保留原生评分、已看和片单操作，海报大小与间距可调。
+// @version      1.2.0
+// @description  IMDb Top250 海报墙：隐藏广告、紧凑布局，保留原生评分、已看和片单操作，海报大小与间距可调，可将看过的电影和评分上传到 GitHub。
 // @author       muzi-xiaoren
 // @match        https://www.imdb.com/chart/top*
 // @run-at       document-start
@@ -11,6 +11,7 @@
 // @grant        GM_setValue
 // @grant        GM_xmlhttpRequest
 // @connect      query.wikidata.org
+// @connect      api.github.com
 // @homepageURL  https://github.com/muzi-xiaoren/MyScripts/tree/main/imdbview
 // @supportURL   https://github.com/muzi-xiaoren/MyScripts/issues
 // @downloadURL  https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/imdbview/imdbview.user.js
@@ -524,6 +525,34 @@
       height: 28px; min-height: 28px; box-sizing: border-box;
       display: inline-flex; align-items: center; justify-content: center;
     }
+    #imdbview-sync { flex: 0 0 auto; font-size: 13px; }
+    #imdbview-sync > summary {
+      cursor: pointer; list-style: none; padding: 9px 10px; font-size: 12px; line-height: 18px;
+      border: 1px solid var(--iv-line); border-radius: 9px; background: var(--iv-panel); color: var(--iv-green);
+    }
+    #imdbview-sync > summary::-webkit-details-marker { display: none; }
+    #imdbview-sync .iv-panel {
+      position: fixed; left: var(--iv-settings-left, 16px); top: var(--iv-settings-top, 72px); z-index: 20;
+      width: min(340px, calc(100vw - 32px)); box-sizing: border-box; padding: 18px;
+      max-height: calc(100dvh - var(--iv-settings-top, 72px) - 16px); overflow: auto;
+      border: 1px solid var(--iv-line); border-radius: 12px; background: var(--iv-panel);
+      box-shadow: 0 12px 40px #24382d20; color: var(--iv-ink);
+    }
+    #imdbview-sync label { display: block; margin-bottom: 12px; }
+    #imdbview-sync input {
+      display: block; width: 100%; box-sizing: border-box; margin: 6px 0 0; padding: 7px 9px;
+      border: 1px solid var(--iv-line); border-radius: 7px; background: var(--iv-bg); color: var(--iv-ink); font: inherit;
+    }
+    #imdbview-sync .iv-sync-actions { display: flex; gap: 8px; }
+    #imdbview-sync button {
+      cursor: pointer; border: 1px solid var(--iv-line); border-radius: 7px; padding: 6px 10px;
+      background: var(--iv-bg); color: var(--iv-ink); font: inherit;
+    }
+    #imdbview-sync button[data-action="upload"] { background: var(--iv-green); border-color: var(--iv-green); color: #fff; }
+    #imdbview-sync button:disabled { cursor: progress; opacity: .6; }
+    #imdbview-sync [role="status"] { margin: 10px 0 0; color: var(--iv-soft); font-size: 12px; overflow-wrap: anywhere; }
+    #imdbview-sync [role="status"]:empty { display: none; }
+    #imdbview-sync :focus-visible { outline: 2px solid var(--iv-green); outline-offset: 2px; }
   `;
   (document.head || document.documentElement).append(style);
 
@@ -568,13 +597,248 @@
   }
 
   function positionSettings() {
-    const menu = document.getElementById('imdbview-settings');
+    positionPanel(document.getElementById('imdbview-settings'), 300);
+    positionPanel(document.getElementById('imdbview-sync'), 340);
+  }
+
+  function positionPanel(menu, maxWidth) {
     if (!menu?.open) return;
     const anchor = menu.querySelector('summary').getBoundingClientRect();
     const panel = menu.querySelector('.iv-panel');
-    const width = Math.min(300, innerWidth - 32);
+    const width = Math.min(maxWidth, innerWidth - 32);
     menu.style.setProperty('--iv-settings-left', `${Math.max(16, Math.min(anchor.right - width, innerWidth - width - 16))}px`);
     menu.style.setProperty('--iv-settings-top', `${Math.max(8, Math.min(anchor.bottom + 8, innerHeight - panel.offsetHeight - 16))}px`);
+  }
+
+  const SYNC_KEY = 'imdbview-github';
+  const SYNC_DEFAULT_PATH = 'movies/imdb';
+  let uploading = false;
+
+  function createSync(host) {
+    const menu = document.createElement('details');
+    menu.id = 'imdbview-sync';
+    menu.innerHTML = `
+      <summary>GitHub 同步</summary>
+      <div class="iv-panel">
+        <label>GitHub Token<input name="token" type="password" autocomplete="off" spellcheck="false" placeholder="github_pat_…"></label>
+        <label>仓库地址<input name="repo" type="url" spellcheck="false" placeholder="https://github.com/owner/repo"></label>
+        <label>分支（可选）<input name="branch" spellcheck="false" placeholder="默认分支"></label>
+        <label>文件路径（可选）<input name="path" spellcheck="false" placeholder="${SYNC_DEFAULT_PATH}"></label>
+        <div class="iv-sync-actions"><button type="button" data-action="save">保存</button><button type="button" data-action="upload">上传看过的电影</button></div>
+        <p role="status" aria-live="polite"></p>
+      </div>`;
+    const saved = GM_getValue(SYNC_KEY, {}) || {};
+    menu.querySelectorAll('input').forEach(input => { input.value = typeof saved[input.name] === 'string' ? saved[input.name] : ''; });
+    menu.querySelector('[data-action="save"]').addEventListener('click', () => {
+      saveSyncConfig(menu);
+      setSyncStatus('已保存。');
+    });
+    menu.querySelector('[data-action="upload"]').addEventListener('click', () => void uploadWatched(menu));
+    menu.addEventListener('toggle', positionSettings);
+    host.append(menu);
+  }
+
+  function saveSyncConfig(menu) {
+    const config = {};
+    menu.querySelectorAll('input').forEach(input => { config[input.name] = input.value.trim(); });
+    GM_setValue(SYNC_KEY, config);
+    return config;
+  }
+
+  function setSyncStatus(text) {
+    const status = document.querySelector('#imdbview-sync [role="status"]');
+    if (status) status.textContent = text;
+  }
+
+  function parseRepository(value) {
+    const match = value.trim().match(/^(?:https?:\/\/github\.com\/|git@github\.com:)?([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/i);
+    return match ? { owner: match[1], repo: match[2] } : null;
+  }
+
+  function githubRequest(method, url, token, body) {
+    return new Promise((resolve, reject) => {
+      GM_xmlhttpRequest({
+        method,
+        url,
+        headers: {
+          Accept: 'application/vnd.github+json',
+          Authorization: `Bearer ${token}`,
+          'X-GitHub-Api-Version': '2022-11-28',
+          ...(body ? { 'Content-Type': 'application/json' } : {}),
+        },
+        data: body ? JSON.stringify(body) : undefined,
+        anonymous: true,
+        timeout: 30000,
+        onload(response) {
+          let json = null;
+          try { json = JSON.parse(response.responseText); } catch { /* 非 JSON 响应只看状态码 */ }
+          resolve({ status: response.status, json });
+        },
+        onerror: () => reject(new Error('无法连接 GitHub')),
+        ontimeout: () => reject(new Error('连接 GitHub 超时')),
+      });
+    });
+  }
+
+  function base64Utf8(text) {
+    const bytes = new TextEncoder().encode(text);
+    let binary = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    return btoa(binary);
+  }
+
+  async function putGithubFile({ token, owner, repo, branch, path, content, message }) {
+    const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path.split('/').map(encodeURIComponent).join('/')}`;
+    const result = await githubRequest('PUT', url, token, { message, content: base64Utf8(content), ...(branch ? { branch } : {}) });
+    if (result.status !== 200 && result.status !== 201) throw githubError(result);
+  }
+
+  function uploadStamp(date = new Date()) {
+    const pad = value => String(value).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
+  }
+
+  function githubError(response) {
+    const reason = { 401: 'Token 无效或已过期', 403: 'Token 没有写入权限', 404: '找不到仓库或分支，或 Token 无权访问', 409: '仓库正在被修改，请重试', 422: '同名文件已存在，或分支、路径无效' }[response.status];
+    return new Error(`GitHub 返回 ${response.status}：${reason || response.json?.message || '请求失败'}`);
+  }
+
+  function rankByMyRating(movies, tieBreak) {
+    const rated = movies.filter(movie => movie.myRating !== null).sort((a, b) => b.myRating - a.myRating || tieBreak(a, b));
+    rated.forEach((movie, index) => {
+      movie.rank = index > 0 && movie.myRating === rated[index - 1].myRating ? rated[index - 1].rank : index + 1;
+    });
+    const unrated = movies.filter(movie => movie.myRating === null).sort(tieBreak);
+    unrated.forEach(movie => { movie.rank = null; });
+    return [...rated, ...unrated];
+  }
+
+  function markdownText(value) {
+    return String(value ?? '').replace(/[\\|[\]]/g, '\\$&').replace(/\s+/g, ' ').trim();
+  }
+
+  async function imdbGraphql(query, variables) {
+    const response = await fetch('https://api.graphql.imdb.com/', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', 'x-imdb-client-name': 'imdb-web-next' },
+      body: JSON.stringify({ query, variables }),
+    });
+    const json = await response.json().catch(() => null);
+    if (!response.ok || !json?.data || json.errors?.length) {
+      throw new Error(json?.errors?.[0]?.message || `IMDb 返回 ${response.status}`);
+    }
+    return json.data;
+  }
+
+  async function collectImdbMovies() {
+    const fields = 'id titleText { text } originalTitleText { text } releaseYear { year } titleType { id } ratingsSummary { aggregateRating }';
+    const movies = new Map();
+    const remember = (title, rating) => {
+      if (!title?.id) return;
+      const movie = movies.get(title.id) || {
+        id: title.id,
+        title: title.titleText?.text || title.id,
+        originalTitle: title.originalTitleText?.text || null,
+        year: title.releaseYear?.year ?? null,
+        type: title.titleType?.id || null,
+        imdbRating: title.ratingsSummary?.aggregateRating ?? null,
+        myRating: null,
+        ratedAt: null,
+        url: `https://www.imdb.com/title/${title.id}/`,
+      };
+      if (rating) Object.assign(movie, { myRating: rating.value, ratedAt: rating.date?.slice(0, 10) || null });
+      movies.set(title.id, movie);
+    };
+    // 评分和已看是两份独立记录；打过分但未标记已看的影片同样计入。
+    const sources = [
+      { field: 'userRatings', cursor: 'String', node: `userRating { value date } title { ${fields} }` },
+      { field: 'userWatchedTitles', cursor: 'ID', node: `title { ${fields} }` },
+    ];
+    for (const source of sources) {
+      let after = null;
+      do {
+        setSyncStatus(`正在读取 IMDb ${source.field === 'userRatings' ? '评分' : '已看'}记录：${movies.size} 部…`);
+        const data = await imdbGraphql(`query($after: ${source.cursor}) {
+          ${source.field}(first: 250, after: $after) { pageInfo { hasNextPage endCursor } edges { node { ${source.node} } } }
+        }`, { after });
+        const page = data[source.field];
+        page.edges.forEach(({ node }) => remember(node.title, node.userRating));
+        after = page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null;
+      } while (after);
+    }
+    return Array.from(movies.values());
+  }
+
+  async function ensureChineseTitles(ids) {
+    const missing = ids.filter(id => cachedChineseTitle(id) === undefined);
+    for (let i = 0; i < missing.length; i += 50) {
+      setSyncStatus(`正在补充中文片名：${i} / ${missing.length}…`);
+      const batch = missing.slice(i, i + 50);
+      try { cacheChineseTitleRows(batch, await fetchChineseTitles(batch)); }
+      catch (error) { console.warn('IMDbView：中文片名补充失败，上传内容只含原名。', error); return; }
+    }
+  }
+
+  function buildImdbFiles(movies) {
+    const exportedAt = new Date().toISOString();
+    const ranked = rankByMyRating(movies.map(movie => ({ ...movie, chineseTitle: cachedChineseTitle(movie.id) || null })),
+      (a, b) => (b.imdbRating ?? 0) - (a.imdbRating ?? 0) || a.title.localeCompare(b.title));
+    const json = {
+      source: 'imdb',
+      ratingScale: 10,
+      exportedAt,
+      total: ranked.length,
+      rated: ranked.filter(movie => movie.myRating !== null).length,
+      movies: ranked.map(({ rank, id, title, originalTitle, chineseTitle, year, type, myRating, imdbRating, ratedAt, url }) => ({
+        rank, id, title, originalTitle: originalTitle !== title ? originalTitle : null, chineseTitle,
+        year, type, myRating, imdbRating, ratedAt, url,
+      })),
+    };
+    const rows = ranked.map(movie => {
+      const name = [movie.title, movie.chineseTitle].filter(Boolean).map(markdownText).join(' · ');
+      return `| ${movie.rank ?? '—'} | [${name}](${movie.url}) | ${movie.year ?? ''} | ${movie.myRating ?? '未评分'} | ${movie.imdbRating ?? ''} | ${movie.ratedAt ?? ''} |`;
+    });
+    const markdown = [
+      '# IMDb 看过的电影',
+      '',
+      `共 ${json.total} 部，已评分 ${json.rated} 部，按我的评分（10 分制）从高到低排列。导出时间：${exportedAt}`,
+      '',
+      '| 排名 | 片名 | 年份 | 我的评分 | IMDb 评分 | 评分日期 |',
+      '| ---: | --- | ---: | ---: | ---: | --- |',
+      ...rows,
+      '',
+    ].join('\n');
+    return { json: `${JSON.stringify(json, null, 2)}\n`, markdown };
+  }
+
+  async function uploadWatched(menu) {
+    if (uploading) return;
+    const config = saveSyncConfig(menu);
+    const repository = parseRepository(config.repo || '');
+    if (!config.token) { setSyncStatus('请填写 GitHub Token。'); return; }
+    if (!repository) { setSyncStatus('仓库地址格式应为 https://github.com/owner/repo。'); return; }
+    const path = (config.path || SYNC_DEFAULT_PATH).replace(/^\/+|\/+$/g, '').replace(/\.(?:json|md)$/i, '') + `-${uploadStamp()}`;
+    const button = menu.querySelector('[data-action="upload"]');
+    uploading = true;
+    button.disabled = true;
+    try {
+      const movies = await collectImdbMovies();
+      await ensureChineseTitles(movies.map(movie => movie.id));
+      const files = buildImdbFiles(movies);
+      const message = `Update IMDb watched movies (${movies.length})`;
+      const target = { token: config.token, ...repository, branch: config.branch, message };
+      setSyncStatus(`正在上传 ${path}.json…`);
+      await putGithubFile({ ...target, path: `${path}.json`, content: files.json });
+      setSyncStatus(`正在上传 ${path}.md…`);
+      await putGithubFile({ ...target, path: `${path}.md`, content: files.markdown });
+      setSyncStatus(`已上传 ${movies.length} 部（已评分 ${movies.filter(movie => movie.myRating !== null).length} 部）到 ${repository.owner}/${repository.repo}：${path}.json / .md。`);
+    } catch (error) {
+      setSyncStatus(`上传失败：${error.message}`);
+    } finally {
+      uploading = false;
+      button.disabled = false;
+    }
   }
 
   function positionChromeToggle() {
@@ -672,6 +936,7 @@
       const regions = `#imdbview-chrome-toggle, ${INFO_HEADER}, ${INFO_PROGRESS}`;
       if (document.activeElement?.matches(':focus-visible') && document.activeElement.closest(regions)) return;
       if (document.getElementById('imdbview-settings')?.open) return;
+      if (document.getElementById('imdbview-sync')?.open) return;
       if (document.getElementById('imdbview-share')?.hidden === false) return;
       document.body.classList.remove('iv-info-open');
     }, 180);
@@ -697,6 +962,7 @@
       chromeCollapsed = !chromeCollapsed;
       closeShare();
       document.getElementById('imdbview-settings')?.removeAttribute('open');
+      document.getElementById('imdbview-sync')?.removeAttribute('open');
       updateChromeToggle();
       GM_setValue('imdbview-chrome-collapsed', chromeCollapsed);
     });
@@ -895,6 +1161,29 @@
     });
   }
 
+  function cacheChineseTitleRows(ids, rows) {
+    const languages = ['zh-cn', 'zh-hans', 'zh', 'zh-sg', 'zh-hant', 'zh-tw'];
+    const matches = new Map();
+    for (const row of rows) {
+      const id = row.id?.value;
+      const name = row.label?.value;
+      const film = row.film?.value;
+      const priority = languages.indexOf(row.label?.['xml:lang']);
+      if (!ids.includes(id) || typeof name !== 'string' || !/[㐀-鿿]/.test(name)
+        || typeof film !== 'string' || priority < 0) continue;
+      const match = matches.get(id);
+      if (!match) matches.set(id, { name, film, priority, ambiguous: false });
+      else if (match.film !== film) match.ambiguous = true;
+      else if (priority < match.priority) Object.assign(match, { name, priority });
+    }
+    ids.forEach(id => {
+      const match = matches.get(id);
+      const name = match && !match.ambiguous ? match.name : null;
+      titleCache[id] = { name, expires: Date.now() + (name ? 30 : 7) * 86400000 };
+    });
+    GM_setValue(TITLE_CACHE_KEY, titleCache);
+  }
+
   async function loadChineseTitles() {
     loadingTitles = true;
     try {
@@ -915,26 +1204,7 @@
           pendingTitles.clear();
           break;
         }
-        const languages = ['zh-cn', 'zh-hans', 'zh', 'zh-sg', 'zh-hant', 'zh-tw'];
-        const matches = new Map();
-        for (const row of rows) {
-          const id = row.id?.value;
-          const name = row.label?.value;
-          const film = row.film?.value;
-          const priority = languages.indexOf(row.label?.['xml:lang']);
-          if (!ids.includes(id) || typeof name !== 'string' || !/[\u3400-\u9fff]/.test(name)
-            || typeof film !== 'string' || priority < 0) continue;
-          const match = matches.get(id);
-          if (!match) matches.set(id, { name, film, priority, ambiguous: false });
-          else if (match.film !== film) match.ambiguous = true;
-          else if (priority < match.priority) Object.assign(match, { name, priority });
-        }
-        ids.forEach(id => {
-          const match = matches.get(id);
-          const name = match && !match.ambiguous ? match.name : null;
-          titleCache[id] = { name, expires: Date.now() + (name ? 30 : 7) * 86400000 };
-        });
-        GM_setValue(TITLE_CACHE_KEY, titleCache);
+        cacheChineseTitleRows(ids, rows);
         const main = document.querySelector(MAIN);
         if (main && /^\/chart\/top\/?$/.test(location.pathname)) addChineseTitles(main);
         if (pendingTitles.size) await new Promise(resolve => setTimeout(resolve, 1000));
@@ -952,6 +1222,7 @@
       document.body.classList.remove('iv-chrome-collapsed');
       document.body.classList.remove('iv-info-open');
       document.getElementById('imdbview-settings')?.remove();
+      document.getElementById('imdbview-sync')?.remove();
       document.getElementById('imdbview-chrome-toggle')?.remove();
       document.getElementById('imdbview-share')?.remove();
       document.getElementById('imdbview-progress')?.remove();
@@ -992,6 +1263,7 @@
     document.documentElement.classList.remove('iv-boot');
     clearTimeout(bootTimeout);
     if (!document.getElementById('imdbview-settings')) createSettings(title);
+    if (!document.getElementById('imdbview-sync')) createSync(title);
     if (!document.getElementById('imdbview-chrome-toggle')) createChromeToggle();
     applySettings();
     updateChromeToggle();
@@ -1020,13 +1292,15 @@
     }
   }, true);
   document.addEventListener('click', event => {
-    const menu = document.getElementById('imdbview-settings');
-    if (menu?.open && !menu.contains(event.target)) menu.open = false;
+    ['imdbview-settings', 'imdbview-sync'].forEach(id => {
+      const menu = document.getElementById(id);
+      if (menu?.open && !menu.contains(event.target)) menu.open = false;
+    });
     const share = document.getElementById('imdbview-share');
     if (share && !share.contains(event.target)) closeShare();
   });
   document.addEventListener('keydown', event => {
-    const menu = document.getElementById('imdbview-settings');
+    const menu = ['imdbview-sync', 'imdbview-settings'].map(id => document.getElementById(id)).find(element => element?.open);
     if (event.key === 'Escape' && document.getElementById('imdbview-share')?.hidden === false) {
       closeShare();
       shareAnchor?.focus();
@@ -1060,7 +1334,7 @@
   // IMDb 会在排序、筛选及登录状态变化时重建榜单，合并更新避免反复扫描。
   let scheduled = false;
   const observer = new MutationObserver(records => {
-    const own = '#imdbview-progress, #imdbview-settings, #imdbview-share, #imdbview-chrome-toggle, .iv-poster-rating, .iv-chinese-title';
+    const own = '#imdbview-progress, #imdbview-settings, #imdbview-sync, #imdbview-share, #imdbview-chrome-toggle, .iv-poster-rating, .iv-chinese-title';
     if (records.every(record => {
       const target = record.target instanceof Element ? record.target : record.target.parentElement;
       if (record.type === 'attributes' && record.attributeName === 'class') {
@@ -1095,7 +1369,8 @@
     if (!domReady || !document.body || !/^\/chart\/top\/?$/.test(location.pathname)) return;
     if (!style.isConnected || !document.body.classList.contains('imdbview') ||
         document.body.classList.contains('iv-chrome-collapsed') !== chromeCollapsed ||
-        !document.getElementById('imdbview-chrome-toggle') || !document.getElementById('imdbview-settings')) enhance();
+        !document.getElementById('imdbview-chrome-toggle') || !document.getElementById('imdbview-settings') ||
+        !document.getElementById('imdbview-sync')) enhance();
   }, 2000);
   enhance();
   }
