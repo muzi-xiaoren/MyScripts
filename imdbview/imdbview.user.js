@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         映幕 IMDbView — IMDb Top250 清爽海报墙
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      1.1.3
+// @version      1.1.4
 // @description  IMDb Top250 海报墙：隐藏广告、紧凑布局，保留原生评分、已看和片单操作，海报大小与间距可调。
 // @author       muzi-xiaoren
 // @match        https://www.imdb.com/chart/top*
@@ -28,6 +28,14 @@
   let domReady = document.readyState !== 'loading';
   const bootTimeout = setTimeout(() => document.documentElement.classList.remove('iv-boot'), 2500);
   const compactAttempts = new WeakMap();
+  let startupRetry = null;
+  function retryStartup(delay = 1000) {
+    if (startupRetry !== null) return;
+    startupRetry = setTimeout(() => {
+      startupRetry = null;
+      enhance();
+    }, delay);
+  }
 
   const DEFAULTS = { posterWidth: 240, gap: 22 };
   const STORAGE_KEY = 'imdbview-appearance';
@@ -938,6 +946,8 @@
   function enhance() {
     if (!domReady || !document.body) return;
     if (!/^\/chart\/top\/?$/.test(location.pathname)) {
+      clearTimeout(startupRetry);
+      startupRetry = null;
       document.body.classList.remove('imdbview');
       document.body.classList.remove('iv-chrome-collapsed');
       document.body.classList.remove('iv-info-open');
@@ -957,21 +967,25 @@
     const main = document.querySelector(MAIN);
     const title = document.querySelector(TITLE);
     const card = main?.querySelector('.cli-parent');
-    if (!title || !card) return;
+    if (!title || !card) { retryStartup(); return; }
 
     // 统一用原生紧凑视图的数据结构，避免用户上次选择的视图影响卡片布局。
     if (!card.classList.contains('li-compact')) {
       const button = document.getElementById('list-view-option-compact');
       if (button && !button.disabled) {
         const attempt = compactAttempts.get(button) || { count: 0, time: 0 };
-        if (attempt.count < 3 && Date.now() - attempt.time >= 500) {
+        const interval = attempt.count < 3 ? 550 : 2000;
+        if (Date.now() - attempt.time >= interval) {
           compactAttempts.set(button, { count: attempt.count + 1, time: Date.now() });
           button.click();
-          setTimeout(enhance, 550);
         }
       }
+      // React 的事件处理器可能晚于 DOM 就绪；未切换成功时继续低频检查。
+      retryStartup(1000);
       return;
     }
+    clearTimeout(startupRetry);
+    startupRetry = null;
     document.body.classList.add('imdbview');
     document.documentElement.classList.remove('iv-boot');
     clearTimeout(bootTimeout);
@@ -1047,6 +1061,13 @@
     const own = '#imdbview-progress, #imdbview-settings, #imdbview-share, #imdbview-chrome-toggle, .iv-poster-rating, .iv-chinese-title';
     if (records.every(record => {
       const target = record.target instanceof Element ? record.target : record.target.parentElement;
+      if (record.type === 'attributes' && record.attributeName === 'class') {
+        if (!target?.matches('.cli-parent')) return true;
+        return /(?:^|\s)li-compact(?:\s|$)/.test(record.oldValue || '') === target.classList.contains('li-compact');
+      }
+      if (record.type === 'attributes' && record.attributeName === 'disabled') {
+        return target?.id !== 'list-view-option-compact';
+      }
       if (target?.closest(own) || target?.closest('.ipc-loader, .ipc-spinner')) return true;
       const nodes = [...record.addedNodes, ...record.removedNodes];
       return nodes.length > 0 && nodes.every(node => node instanceof Element && node.matches(own));
@@ -1060,7 +1081,8 @@
   });
   observer.observe(document.documentElement, {
     childList: true, characterData: true, subtree: true,
-    attributes: true, attributeFilter: ['aria-valuenow', 'aria-valuemax', 'aria-pressed'],
+    attributes: true, attributeOldValue: true,
+    attributeFilter: ['aria-valuenow', 'aria-valuemax', 'aria-pressed', 'class', 'disabled'],
   });
   document.addEventListener('DOMContentLoaded', () => { domReady = true; enhance(); }, { once: true });
   enhance();
