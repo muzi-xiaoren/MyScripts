@@ -2,7 +2,7 @@
 
 A light poster wall for IMDb Top 250, following DouView's visual style.
 
-Current version: `1.1.4`.
+Current version: `1.1.5`.
 
 - Adjustable poster width (160–360 px) and card spacing (8–40 px), saved locally.
 - Compact heading and native filters; DouView-style appearance settings open in a viewport-constrained overlay with outside-click and Escape dismissal.
@@ -27,10 +27,12 @@ An earlier poster-wall revision was tested against the actual IMDb DOM and style
 
 The local preview omits IMDb's application scripts. Live account actions, native filtering/sorting and React updates still require testing after installation on IMDb. No account ratings or watchlists were changed.
 
-Version 1.1.4 passed syntax checking and isolated Chrome checks at 320px, 390px, 768px and 1280px: separated progress labels/bar, live progress-data updates, stable share position and header size, share/settings viewport bounds, Escape and outside dismissal, native watched-node/listener retention, and card font scaling. No runtime errors occurred. The fixture uses modeled IMDb markup and placeholder posters; live IMDb React updates, system clipboard copying and external share destinations remain unverified.
+Version 1.1.5 passed syntax checking and isolated Chrome checks at 320px, 390px, 768px and 1280px: separated progress labels/bar, live progress-data updates, stable share position and header size, share/settings viewport bounds, Escape and outside dismissal, native watched-node/listener retention, and card font scaling. No runtime errors occurred. The fixture uses modeled IMDb markup and placeholder posters; live IMDb React updates, system clipboard copying and external share destinations remain unverified.
 
 Chinese labels are requested anonymously from `query.wikidata.org` in sequential batches of up to 50 public IMDb IDs, with one retry. Results are cached for 30 days (7 days for missing labels). No IMDb login cookies are sent. This feature adds `GM_xmlhttpRequest` and a restricted `@connect` permission. Cached Chinese labels have been tested for full-title display; live Wikidata requests remain unverified.
 
-Additional isolated checks for 1.1.4 confirmed unclipped long titles, poster rating display and updates, and native rating/watched/info node and event retention, rating controls within the poster, and title-info placement without metadata overlap. Additional startup checks confirmed safe initialization before the root exists, mask release and synchronized toggle/panel visibility.
+Additional isolated checks for 1.1.5 confirmed unclipped long titles, poster rating display and updates, and native rating/watched/info node and event retention, rating controls within the poster, and title-info placement without metadata overlap. Additional startup checks confirmed safe initialization before the root exists, mask release and synchronized toggle/panel visibility.
+
+Enhancement recovers when native initialization overwrites body or collapsed state, removes the stylesheet or settings, rebuilds head/body, or switches back to the detailed list. Relevant mutations are observed; a lightweight two-second state check provides fallback without rescanning healthy cards. Seven overwrite-recovery scenarios passed isolated Chrome regression checks; live IMDb initialization still needs verification.
 
 MIT · [中文](./README.md)
