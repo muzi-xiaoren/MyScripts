@@ -1,11 +1,11 @@
 // ==UserScript==
 // @name         映幕 IMDbView — IMDb Top250 清爽海报墙
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      1.1.2
+// @version      1.1.3
 // @description  IMDb Top250 海报墙：隐藏广告、紧凑布局，保留原生评分、已看和片单操作，海报大小与间距可调。
 // @author       muzi-xiaoren
 // @match        https://www.imdb.com/chart/top*
-// @run-at       document-end
+// @run-at       document-start
 // @noframes
 // @grant        GM_getValue
 // @grant        GM_setValue
@@ -19,10 +19,15 @@
 // ==/UserScript==
 
 (function () {
+  function initialize() {
   'use strict';
 
   if (!/^\/chart\/top\/?$/.test(location.pathname)) return;
   if (document.getElementById('imdbview-style')) return;
+  document.documentElement.classList.add('iv-boot');
+  let domReady = document.readyState !== 'loading';
+  const bootTimeout = setTimeout(() => document.documentElement.classList.remove('iv-boot'), 2500);
+  const compactAttempts = new WeakMap();
 
   const DEFAULTS = { posterWidth: 240, gap: 22 };
   const STORAGE_KEY = 'imdbview-appearance';
@@ -45,6 +50,25 @@
   const requestedTitles = new Set();
   const pendingTitles = new Set();
   let loadingTitles = false;
+  const preparedImages = new WeakMap();
+  function upgradeImage(img) {
+    const larger = img.src.replace(/\._V1_QL75_UX\d+_CR[^.]+\.jpg$/, '._V1_QL75_UX720_.jpg');
+    if (larger !== img.src && img.src.startsWith('https://m.media-amazon.com/')) {
+      const original = { src: img.src, srcset: img.srcset, sizes: img.sizes };
+      img.addEventListener('error', () => { Object.assign(img, original); preparedImages.set(img, original.src); }, { once: true });
+      img.srcset = `${larger} 720w`;
+      img.sizes = `${settings.posterWidth}px`;
+      img.src = larger;
+    }
+    preparedImages.set(img, img.src);
+  }
+  const posterObserver = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (!entry.isIntersecting) return;
+      posterObserver.unobserve(entry.target);
+      upgradeImage(entry.target);
+    });
+  }, { rootMargin: '300px' });
 
   function bounded(value, min, max, fallback) {
     return typeof value === 'number' && Number.isFinite(value)
@@ -54,6 +78,7 @@
   const style = document.createElement('style');
   style.id = 'imdbview-style';
   style.textContent = `
+    html.iv-boot main, html.iv-boot #imdbHeader { visibility: hidden; }
     body.imdbview {
       --iv-bg: #f5f7f5;
       --iv-panel: #fff;
@@ -468,8 +493,31 @@
     .imdbview ${MAIN} .iv-native-rate svg { width: 18px; height: 18px; color: #fff; }
     .imdbview ${MAIN} .iv-native-watched { padding: 2px 6px; min-height: 24px; }
     .imdbview ${MAIN} .iv-native-info { width: 28px; height: 28px; }
+    #imdbview-chrome-toggle { height: 36px; width: min(620px, calc(100vw - 32px)); }
+    #imdbview-chrome-toggle button {
+      height: 36px; padding: 4px 14px; font-size: 14px; gap: 10px;
+      border-radius: 12px 12px 0 0;
+    }
+    #imdbview-chrome-toggle svg { width: 22px; height: 22px; }
+    .imdbview.iv-info-open #imdbview-chrome-toggle button { opacity: 1; transition: none; }
+    .imdbview.iv-info-open ${INFO_HEADER} {
+      top: calc(var(--iv-toggle-top, 0px) + 36px); border-radius: 12px;
+    }
+    .imdbview ${MAIN} > div:has([data-testid="chart-layout-total-items"]) { grid-column: 1; }
+    .imdbview ${MAIN} > div:has([data-testid="sort-container"]) { grid-column: 2; }
+    .imdbview ${MAIN} > .ipc-chip-list { grid-column: 1 / -1; justify-self: end; }
+    .imdbview [data-testid="sort-container"] {
+      display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--iv-soft);
+    }
+    .imdbview [data-testid="sort-container"] button,
+    .imdbview ${MAIN} .ipc-chip { font-size: 12px; min-height: 30px; }
+    .imdbview ${MAIN} .iv-poster-rating,
+    .imdbview ${MAIN} .iv-native-rate {
+      height: 28px; min-height: 28px; box-sizing: border-box;
+      display: inline-flex; align-items: center; justify-content: center;
+    }
   `;
-  document.head.append(style);
+  (document.head || document.documentElement).append(style);
 
   function applySettings() {
     document.body.style.setProperty('--iv-poster-width', `${settings.posterWidth}px`);
@@ -524,7 +572,7 @@
   function positionChromeToggle() {
     const list = document.querySelector(`${MAIN} > .ipc-metadata-list`);
     if (!list) return;
-    const top = chromeCollapsed ? 0 : Math.max(0, list.getBoundingClientRect().top - 30);
+    const top = chromeCollapsed ? 0 : Math.max(0, document.getElementById('imdbHeader')?.getBoundingClientRect().bottom || 0);
     document.body.style.setProperty('--iv-toggle-top', `${top}px`);
     positionShare();
     positionSettings();
@@ -698,7 +746,37 @@
       const rects = Array.from(range.getClientRects()).filter(rect => rect.width > 0 && rect.height > 0);
       return rects.at(-1) || element.getBoundingClientRect();
     };
-    main.querySelectorAll('.cli-parent').forEach(card => {
+    const cards = Array.from(main.querySelectorAll('.cli-parent'));
+    const rows = new Map();
+    const rowLayout = new WeakMap();
+    cards.forEach(card => {
+      const title = card.querySelector('.cli-title');
+      const metadata = card.querySelector('.cli-title-metadata');
+      const watched = card.querySelector('[data-testid^="inline-watched-button-"]');
+      if (title) { remember(title); title.classList.add('iv-action-title'); title.style.minHeight = '0px'; }
+      if (metadata) { remember(metadata); metadata.style.minHeight = '0px'; metadata.style.paddingBottom = '0px'; }
+      if (watched) { remember(watched); watched.classList.add('iv-native-watched'); }
+    });
+    cards.forEach(card => {
+      const key = Math.round(card.getBoundingClientRect().top);
+      if (!rows.has(key)) rows.set(key, []);
+      rows.get(key).push(card);
+    });
+    rows.forEach(row => {
+      const titleHeight = Math.max(...row.map(card => card.querySelector('.cli-title')?.getBoundingClientRect().height || 0));
+      const metadataHeight = Math.max(...row.map(card => card.querySelector('.cli-title-metadata')?.getBoundingClientRect().height || 0));
+      const wrap = row.some(card => {
+        const metadata = card.querySelector('.cli-title-metadata');
+        const watched = card.querySelector('[data-testid^="inline-watched-button-"]');
+        return metadata && watched && lastTextRect(metadata).right + watched.getBoundingClientRect().width + 8 > metadata.getBoundingClientRect().right;
+      });
+      row.forEach(card => {
+        const title = card.querySelector('.cli-title');
+        if (title) title.style.minHeight = `${titleHeight}px`;
+        rowLayout.set(card, { wrap, metadataHeight });
+      });
+    });
+    cards.forEach(card => {
       const image = card.querySelector('.ipc-poster__poster-image');
       const badge = card.querySelector('.iv-poster-rating');
       const rate = card.querySelector('.cli-ratings-container button, .cli-ratings-container [role="button"]');
@@ -732,12 +810,14 @@
         const text = lastTextRect(metadata);
         const rect = metadata.getBoundingClientRect();
         const size = watched.getBoundingClientRect();
-        if (text.right + size.width + 8 <= rect.right) {
-          metadata.style.minHeight = `${Math.max(rect.height, size.height)}px`;
+        const layout = rowLayout.get(card);
+        if (!layout.wrap) {
+          metadata.style.minHeight = `${Math.max(layout.metadataHeight, size.height)}px`;
           place(watched, text.right + 8, Math.max(rect.top, text.top + (text.height - size.height) / 2));
         } else {
+          metadata.style.minHeight = `${layout.metadataHeight + size.height + 4}px`;
           metadata.style.paddingBottom = `${size.height + 4}px`;
-          place(watched, rect.left, text.bottom + 4);
+          place(watched, rect.left, rect.top + layout.metadataHeight + 4);
         }
       }
     });
@@ -856,6 +936,7 @@
 
   // 只改布局，不搬走 React 管理的节点，保留 IMDb 的事件和状态更新。
   function enhance() {
+    if (!domReady || !document.body) return;
     if (!/^\/chart\/top\/?$/.test(location.pathname)) {
       document.body.classList.remove('imdbview');
       document.body.classList.remove('iv-chrome-collapsed');
@@ -866,9 +947,9 @@
       document.getElementById('imdbview-progress')?.remove();
       document.querySelectorAll('.iv-poster-rating').forEach(badge => badge.remove());
       document.querySelectorAll('.iv-overlay-source').forEach(source => source.classList.remove('iv-overlay-source'));
-      document.querySelectorAll('.iv-native-rate, .iv-native-watched, .iv-native-info, .iv-action-metadata').forEach(element => {
+      document.querySelectorAll('.iv-native-rate, .iv-native-watched, .iv-native-info, .iv-action-metadata, .iv-action-title').forEach(element => {
         actionStyles.get(element)?.forEach(([name, value, priority]) => element.style.setProperty(name, value, priority));
-        element.classList.remove('iv-native-rate', 'iv-native-watched', 'iv-native-info', 'iv-action-metadata');
+        element.classList.remove('iv-native-rate', 'iv-native-watched', 'iv-native-info', 'iv-action-metadata', 'iv-action-title');
         actionStyles.delete(element);
       });
       return;
@@ -880,10 +961,20 @@
 
     // 统一用原生紧凑视图的数据结构，避免用户上次选择的视图影响卡片布局。
     if (!card.classList.contains('li-compact')) {
-      document.getElementById('list-view-option-compact')?.click();
+      const button = document.getElementById('list-view-option-compact');
+      if (button && !button.disabled) {
+        const attempt = compactAttempts.get(button) || { count: 0, time: 0 };
+        if (attempt.count < 3 && Date.now() - attempt.time >= 500) {
+          compactAttempts.set(button, { count: attempt.count + 1, time: Date.now() });
+          button.click();
+          setTimeout(enhance, 550);
+        }
+      }
       return;
     }
     document.body.classList.add('imdbview');
+    document.documentElement.classList.remove('iv-boot');
+    clearTimeout(bootTimeout);
     if (!document.getElementById('imdbview-settings')) createSettings(title);
     if (!document.getElementById('imdbview-chrome-toggle')) createChromeToggle();
     applySettings();
@@ -893,21 +984,13 @@
     syncPosterRatings(main);
     syncCardActions();
 
-    // 原紧凑视图最多提供 180px 海报，沿用同一图片标识请求较大版本。
+    // 接近视口时再加载大图，减少与原生账号状态请求的竞争。
     main.querySelectorAll('.ipc-poster__poster-image img').forEach(img => {
-      if (img.dataset.imdbviewPoster === img.src) return;
-      const larger = img.src.replace(/\._V1_QL75_UX\d+_CR[^.]+\.jpg$/, '._V1_QL75_UX720_.jpg');
-      if (larger !== img.src && img.src.startsWith('https://m.media-amazon.com/')) {
-        const original = { src: img.src, srcset: img.srcset, sizes: img.sizes };
-        img.addEventListener('error', () => {
-          Object.assign(img, original);
-          img.dataset.imdbviewPoster = original.src;
-        }, { once: true });
-        img.srcset = `${larger} 720w`;
-        img.sizes = `${settings.posterWidth}px`;
-        img.src = larger;
-      }
-      img.dataset.imdbviewPoster = img.src;
+      if (preparedImages.get(img) === img.src) return;
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      preparedImages.set(img, img.src);
+      posterObserver.observe(img);
     });
   }
 
@@ -961,7 +1044,13 @@
   // IMDb 会在排序、筛选及登录状态变化时重建榜单，合并更新避免反复扫描。
   let scheduled = false;
   const observer = new MutationObserver(records => {
-    if (records.every(record => record.type === 'attributes' && record.target.closest('#imdbview-progress'))) return;
+    const own = '#imdbview-progress, #imdbview-settings, #imdbview-share, #imdbview-chrome-toggle, .iv-poster-rating, .iv-chinese-title';
+    if (records.every(record => {
+      const target = record.target instanceof Element ? record.target : record.target.parentElement;
+      if (target?.closest(own) || target?.closest('.ipc-loader, .ipc-spinner')) return true;
+      const nodes = [...record.addedNodes, ...record.removedNodes];
+      return nodes.length > 0 && nodes.every(node => node instanceof Element && node.matches(own));
+    })) return;
     if (scheduled) return;
     scheduled = true;
     requestAnimationFrame(() => {
@@ -969,9 +1058,20 @@
       enhance();
     });
   });
-  observer.observe(document.body, {
+  observer.observe(document.documentElement, {
     childList: true, characterData: true, subtree: true,
     attributes: true, attributeFilter: ['aria-valuenow', 'aria-valuemax', 'aria-pressed'],
   });
+  document.addEventListener('DOMContentLoaded', () => { domReady = true; enhance(); }, { once: true });
   enhance();
+  }
+  if (document.documentElement) initialize();
+  else {
+    const rootObserver = new MutationObserver(() => {
+      if (!document.documentElement) return;
+      rootObserver.disconnect();
+      initialize();
+    });
+    rootObserver.observe(document, { childList: true });
+  }
 })();
