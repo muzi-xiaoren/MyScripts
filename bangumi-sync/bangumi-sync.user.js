@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         番组同步 BangumiSync — Bangumi 收藏上传到 GitHub
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      1.0.0
+// @version      1.0.1
 // @description  在 Bangumi 右下角 dock 加入「GitHub 同步」，把动画、书籍、音乐、游戏、三次元的全部收藏按我的评分排名，上传为带时间戳的 JSON 和 Markdown。
 // @author       muzi-xiaoren
 // @match        https://bangumi.tv/*
@@ -62,6 +62,7 @@
       border-radius: 6px; background: #fafafa; color: #333; font: inherit;
     }
     #bgmsync input:focus { outline: none; border-color: #f09199; background: #fff; }
+    #bgmsync .bgmsync-secret { -webkit-text-security: disc; }
     #bgmsync .bgmsync-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     #bgmsync .bgmsync-actions { display: flex; gap: 8px; }
     #bgmsync button {
@@ -76,20 +77,23 @@
   `;
   document.head.append(style);
 
+  // 输入框不使用 name 和 password 类型，避免浏览器把面板当成登录表单自动填入账号密码。
+  const field = (key, placeholder, secret = false) =>
+    `<input data-field="${key}" type="text"${secret ? ' class="bgmsync-secret"' : ''} autocomplete="off" spellcheck="false" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other" placeholder="${placeholder}">`;
   const entry = document.createElement('li');
   entry.innerHTML = `
     <details id="bgmsync">
       <summary><a>GitHub 同步</a></summary>
       <div class="bgmsync-panel">
         <strong>上传收藏到 GitHub</strong>
-        <label>GitHub Token<input name="token" type="password" autocomplete="off" spellcheck="false" placeholder="github_pat_…"></label>
-        <label>仓库地址<input name="repo" type="url" spellcheck="false" placeholder="https://github.com/owner/repo"></label>
+        <label>GitHub Token${field('token', 'github_pat_…', true)}</label>
+        <label>仓库地址${field('repo', 'https://github.com/owner/repo')}</label>
         <div class="bgmsync-row">
-          <label>分支（可选）<input name="branch" spellcheck="false" placeholder="默认分支"></label>
-          <label>文件目录（可选）<input name="path" spellcheck="false" placeholder="${DEFAULT_DIR}"></label>
+          <label>分支（可选）${field('branch', '默认分支')}</label>
+          <label>文件目录（可选）${field('path', DEFAULT_DIR)}</label>
         </div>
-        <label>Bangumi 用户名（可选）<input name="username" spellcheck="false" placeholder="默认读取当前登录账号"></label>
-        <label>Bangumi Token（可选）<input name="bgmToken" type="password" autocomplete="off" spellcheck="false" placeholder="用于读取仅自己可见的收藏"><small>在 next.bgm.tv/demo/access-token 生成</small></label>
+        <label>Bangumi 用户名（可选）${field('username', '默认读取当前登录账号')}</label>
+        <label>Bangumi Token（可选）${field('bgmToken', '用于读取仅自己可见的收藏', true)}<small>在 next.bgm.tv/demo/access-token 生成</small></label>
         <div class="bgmsync-actions"><button type="button" data-action="save">保存</button><button type="button" data-action="upload">上传全部收藏</button></div>
         <p role="status" aria-live="polite"></p>
       </div>
@@ -101,7 +105,7 @@
   const status = sync.querySelector('[role="status"]');
   const uploadButton = sync.querySelector('[data-action="upload"]');
   const saved = GM_getValue(SYNC_KEY, {}) || {};
-  sync.querySelectorAll('input').forEach(input => { input.value = typeof saved[input.name] === 'string' ? saved[input.name] : ''; });
+  sync.querySelectorAll('input').forEach(input => { input.value = typeof saved[input.dataset.field] === 'string' ? saved[input.dataset.field] : ''; });
 
   function positionPanel() {
     if (!sync.open) return;
@@ -120,7 +124,7 @@
 
   function saveConfig() {
     const config = {};
-    sync.querySelectorAll('input').forEach(input => { config[input.name] = input.value.trim(); });
+    sync.querySelectorAll('input').forEach(input => { config[input.dataset.field] = input.value.trim(); });
     GM_setValue(SYNC_KEY, config);
     return config;
   }
@@ -287,7 +291,7 @@
     if (uploading) return;
     const config = saveConfig();
     const repository = parseRepository(config.repo || '');
-    if (!config.token) { status.textContent = '请填写 GitHub Token。'; return; }
+    if (!/^(?:github_pat_|gh[pousr]_)\w+$/.test(config.token || '')) { status.textContent = '请填写 GitHub Token（以 github_pat_ 或 ghp_ 开头）。'; return; }
     if (!repository) { status.textContent = '仓库地址格式应为 https://github.com/owner/repo。'; return; }
     const dir = (config.path || DEFAULT_DIR).replace(/^\/+|\/+$/g, '');
     uploading = true;
