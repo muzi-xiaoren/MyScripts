@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         蒸汽同步 SteamSync — Steam 年度回顾与游玩时长上传到 GitHub
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      1.0.0
+// @version      1.0.1
 // @description  在 Steam 商店顶部导航加入「年度回顾」和「GitHub 同步」，把每年的 Steam 年度回顾（含每个游戏的小时数）和全部游戏的累计时长上传到 GitHub，并合并多个账号生成总表。
 // @author       muzi-xiaoren
 // @match        https://store.steampowered.com/*
@@ -123,6 +123,7 @@
   }
 
   const hours = seconds => Math.round(seconds / 360) / 10;
+  const duration = seconds => (seconds < 3600 ? `${Math.max(1, Math.round(seconds / 60))} 分钟` : `${hours(seconds)} 小时`);
   const pad = value => String(value).padStart(2, '0');
   const localDate = rtime => {
     if (!rtime) return null;
@@ -252,21 +253,21 @@
       `# ${replay.year} 年 Steam 年度回顾`,
       '',
       `- 账号：${steamid}`,
-      `- 总时长：${replay.totalHours} 小时，游戏 ${replay.games.length} 个（当年新玩 ${newGames} 个）`,
+      `- 总时长：${duration(replay.totalSeconds)}，游戏 ${replay.games.length} 个（当年新玩 ${newGames} 个）`,
       ...(achievements.total != null ? [`- 成就：${achievements.total} 个（稀有 ${achievements.rare ?? 0} 个，涉及 ${achievements.games ?? 0} 个游戏）`] : []),
       `- 原页面：https://store.steampowered.com/replay/${steamid}/${replay.year}`,
       '',
       '## 游戏',
       '',
-      '| 排名 | 游戏 | 小时 | 占比 | 当年新玩 | 首次游玩 | 平台 |',
+      '| 排名 | 游戏 | 时长 | 占比 | 当年新玩 | 首次游玩 | 平台 |',
       '| ---: | --- | ---: | ---: | :---: | --- | --- |',
-      ...replay.games.map(game => `| ${game.rank} | ${gameLink(game)}${game.demo ? '（试玩）' : ''} | ${game.hours} | ${game.percent}% | ${game.newThisYear ? '✓' : ''} | ${game.firstPlayed ?? ''} | ${game.platforms.join(' / ')} |`),
+      ...replay.games.map(game => `| ${game.rank} | ${gameLink(game)}${game.demo ? '（试玩）' : ''} | ${duration(game.seconds)} | ${game.percent}% | ${game.newThisYear ? '✓' : ''} | ${game.firstPlayed ?? ''} | ${game.platforms.join(' / ')} |`),
       '',
       '## 每月',
       '',
-      '| 月份 | 小时 | 玩得最多 |',
+      '| 月份 | 时长 | 玩得最多 |',
       '| --- | ---: | --- |',
-      ...replay.months.map(month => `| ${month.month} | ${month.hours} | ${month.games.filter(game => game.hours > 0).slice(0, 3).map(game => `${gameLink(game)} ${game.hours} 小时`).join('、')} |`),
+      ...replay.months.map(month => `| ${month.month} | ${duration(month.seconds)} | ${month.games.slice(0, 3).map(game => `${gameLink(game)} ${duration(game.seconds)}`).join('、')} |`),
       '',
       ...(replay.tags.length ? [
         '## 标签',
@@ -303,11 +304,11 @@
       '',
       `- 账号：${steamid}`,
       `- 导出时间：${exportedAt}`,
-      `- 玩过的游戏：${games.length} 个，共 ${Math.round(total / 6) / 10} 小时（包含以前家庭共享借玩的游戏）`,
+      `- 玩过的游戏：${games.length} 个，共 ${duration(total * 60)}（包含以前家庭共享借玩的游戏）`,
       '',
-      '| 排名 | 游戏 | 小时 | 近两周（分钟） | 首次游玩 | 最近游玩 |',
+      '| 排名 | 游戏 | 时长 | 近两周（分钟） | 首次游玩 | 最近游玩 |',
       '| ---: | --- | ---: | ---: | --- | --- |',
-      ...games.map(game => `| ${game.rank} | ${gameLink(game)} | ${game.hours} | ${game.recentMinutes || ''} | ${game.firstPlayed ?? ''} | ${game.lastPlayed ?? ''} |`),
+      ...games.map(game => `| ${game.rank} | ${gameLink(game)} | ${duration(game.minutes * 60)} | ${game.recentMinutes || ''} | ${game.firstPlayed ?? ''} | ${game.lastPlayed ?? ''} |`),
       '',
     ].join('\n');
   }
@@ -350,7 +351,7 @@
     const summary = steamids.map(steamid => ({
       steamid,
       lifetimeExportedAt: accounts[steamid].lifetime?.exportedAt || null,
-      years: Object.fromEntries(Object.values(accounts[steamid].replays).map(replay => [replay.year, { hours: replay.totalHours, games: replay.games.length }])),
+      years: Object.fromEntries(Object.values(accounts[steamid].replays).map(replay => [replay.year, { hours: replay.totalHours, seconds: replay.totalSeconds ?? replay.totalHours * 3600, games: replay.games.length }])),
     }));
     return { generatedAt, steamids, years, summary, games: list.map((game, index) => ({ rank: ranks[index], ...game })) };
   }
@@ -365,17 +366,17 @@
       '',
       '## 账号',
       '',
-      `| 账号 | 累计小时 | 累计时长快照 | ${years.map(year => `${year} 年`).join(' | ')} |`,
+      `| 账号 | 累计时长 | 累计时长快照 | ${years.map(year => `${year} 年`).join(' | ')} |`,
       `| --- | ---: | --- |${years.map(() => ' ---: |').join('')}`,
-      ...index.summary.map(account => `| ${account.steamid} | ${Math.round(accountMinutes(account.steamid) / 6) / 10} | ${account.lifetimeExportedAt ?? '无'} | ${years.map(year => (account.years[year] ? `${account.years[year].hours} 小时 / ${account.years[year].games} 个` : '')).join(' | ')} |`),
+      ...index.summary.map(account => `| ${account.steamid} | ${duration(accountMinutes(account.steamid) * 60)} | ${account.lifetimeExportedAt ?? '无'} | ${years.map(year => (account.years[year] ? `${duration(account.years[year].seconds)} / ${account.years[year].games} 个` : '')).join(' | ')} |`),
       '',
       '## 游戏',
       '',
-      '年度列为该年各账号回顾中的小时数之和；账号列为各账号的累计小时数。',
+      '年度列为该年各账号回顾中的时长之和；账号列为各账号的累计时长。',
       '',
-      `| 排名 | 游戏 | 合计小时 | ${steamids.join(' | ')} | ${years.map(year => `${year}`).join(' | ')} | 首次游玩 |`,
+      `| 排名 | 游戏 | 合计时长 | ${steamids.join(' | ')} | ${years.map(year => `${year}`).join(' | ')} | 首次游玩 |`,
       `| ---: | --- | ---: |${steamids.map(() => ' ---: |').join('')}${years.map(() => ' ---: |').join('')} --- |`,
-      ...index.games.map(game => `| ${game.rank} | ${gameLink(game)} | ${game.totalHours || ''} | ${steamids.map(steamid => (game.minutes[steamid] ? Math.round(game.minutes[steamid] / 6) / 10 : '')).join(' | ')} | ${years.map(year => (game.yearSeconds[year] ? hours(game.yearSeconds[year]) : '')).join(' | ')} | ${game.firstPlayed ?? ''} |`),
+      ...index.games.map(game => `| ${game.rank} | ${gameLink(game)} | ${game.totalMinutes ? duration(game.totalMinutes * 60) : ''} | ${steamids.map(steamid => (game.minutes[steamid] ? duration(game.minutes[steamid] * 60) : '')).join(' | ')} | ${years.map(year => (game.yearSeconds[year] ? duration(game.yearSeconds[year]) : '')).join(' | ')} | ${game.firstPlayed ?? ''} |`),
       '',
     ].join('\n');
   }
