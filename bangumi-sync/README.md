@@ -2,7 +2,7 @@
 
 把 [Bangumi 番组计划](https://bgm.tv/) 的全部收藏上传到 GitHub 仓库。
 
-当前版本：`1.0.0`。
+当前版本：`1.0.1`。
 
 ## 功能
 
@@ -20,7 +20,7 @@ JSON 每个条目包含排名、条目 ID、原名、中文名、日期、收藏
 
 ## 安全
 
-两个 Token 都以明文保存在油猴存储中。GitHub Token 建议使用只授权目标仓库、只开放 Contents 读写的 fine-grained token。请求只发往 `api.bgm.tv` 和 `api.github.com`，不携带 Bangumi 网站的 Cookie。
+两个 Token 都以明文保存在油猴存储中。GitHub Token 建议使用只授权目标仓库、只开放 Contents 读写的 fine-grained token；上传前会检查它是否以 `github_pat_` 或 `ghp_` 等前缀开头。输入框不使用登录表单的字段名和密码类型（`1.0.1` 起），避免浏览器把已保存的 Bangumi 账号密码自动填进来。请求只发往 `api.bgm.tv` 和 `api.github.com`，不携带 Bangumi 网站的 Cookie。
 
 ## 安装
 
