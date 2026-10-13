@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         哔哩同步 BilibiliSync — B 站投稿、动态、收藏夹和关注上传到 GitHub
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      1.0.0
-// @description  在 B 站页面左下角加入「GitHub 同步」，把自己的投稿视频（含字幕和 B 站 AI 总结）、动态全文、全部自建收藏夹和关注列表，上传到 GitHub 带时间戳的目录。
+// @version      1.1.0
+// @description  在 B 站页面左下角加入「GitHub 同步」，把自己的投稿视频（含字幕、B 站识别的 BGM 和 AI 总结）、动态全文、全部自建收藏夹和关注列表，上传到 GitHub 带时间戳的目录。
 // @author       muzi-xiaoren
 // @match        https://www.bilibili.com/*
 // @match        https://space.bilibili.com/*
@@ -227,10 +227,24 @@
       const view = await biliApi('/x/web-interface/view', { bvid: item.bvid });
       const tags = await biliApi('/x/tag/archive/tags', { bvid: item.bvid }).catch(() => []);
       const subtitles = [];
+      const bgm = [];
       for (const page of view.pages || []) {
         const player = await biliApi('/x/player/wbi/v2', { bvid: item.bvid, cid: page.cid }, { wbi: true });
         const subtitle = (player.subtitle?.subtitles || []).find(entry => entry.subtitle_url);
         if (subtitle) subtitles.push({ page: page.page, part: page.part, ...(await readSubtitle(subtitle)) });
+        // B 站自动识别的 BGM 只出现在带 cid 的标签接口里（视频标签栏的「发现《…》」）。
+        const pageTags = await biliApi('/x/web-interface/view/detail/tag', { bvid: item.bvid, cid: page.cid }).catch(() => []);
+        for (const tag of (pageTags || []).filter(entry => entry.tag_type === 'bgm' && entry.music_id)) {
+          if (bgm.some(entry => entry.musicId === tag.music_id)) continue;
+          const music = await biliApi('/x/copyright-music-publicity/bgm/detail', { music_id: tag.music_id }).catch(() => null);
+          bgm.push({
+            musicId: tag.music_id,
+            title: music?.music_title || tag.tag_name.replace(/^发现《(.*)》$/, '$1'),
+            artist: music?.origin_artist || null,
+            album: music?.album || null,
+            page: (view.pages || []).length > 1 ? page.page : null,
+          });
+        }
       }
       const conclusion = await biliApi('/x/web-interface/view/conclusion/get', { bvid: item.bvid, cid: view.cid, up_mid: mid }, { wbi: true }).catch(() => null);
       const summary = conclusion?.code === 0 ? conclusion.model_result : null;
@@ -245,6 +259,7 @@
         pages: (view.pages || []).length > 1 ? view.pages.map(page => ({ page: page.page, part: page.part, duration: formatDuration(page.duration) })) : null,
         stat: { view: view.stat.view, like: view.stat.like, coin: view.stat.coin, favorite: view.stat.favorite, danmaku: view.stat.danmaku, reply: view.stat.reply },
         aiSummary: summary?.summary ? { summary: summary.summary, outline: (summary.outline || []).map(part => ({ title: part.title, at: formatDuration(part.timestamp) })) } : null,
+        bgm,
         subtitles,
         url: videoUrl(item.bvid),
       });
@@ -418,6 +433,9 @@
       if (video.aiSummary) {
         lines.push(`- B 站 AI 总结：${markdownText(video.aiSummary.summary)}`);
         if (video.aiSummary.outline.length) lines.push(`- 分段：${video.aiSummary.outline.map(part => `${part.at} ${markdownText(part.title)}`).join('；')}`);
+      }
+      if (video.bgm.length) {
+        lines.push(`- BGM：${video.bgm.map(music => `${music.page ? `P${music.page} ` : ''}《${markdownText(music.title)}》${music.artist ? ` — ${markdownText(music.artist)}` : ''}`).join('；')}`);
       }
       if (video.subtitles.length) {
         const count = video.subtitles.reduce((sum, subtitle) => sum + subtitle.lines.length, 0);
