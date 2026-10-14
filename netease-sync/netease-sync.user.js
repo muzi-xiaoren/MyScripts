@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         云音同步 NeteaseSync — 网易云歌单上传到 GitHub
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      1.0.0
-// @description  在网易云音乐顶部导航加入「GitHub 同步」，把自建歌单的全部歌曲、收藏歌单的名称与简介和听歌排行，上传到 GitHub 带时间戳的目录。
+// @version      1.1.0
+// @description  在网易云音乐顶部导航加入「GitHub 同步」，把自建歌单的全部歌曲、收藏歌单的名称与简介、听歌排行、本人动态、自建与订阅的播客和播客收听记录，上传到 GitHub 带时间戳的目录。
 // @author       muzi-xiaoren
 // @match        https://music.163.com/*
 // @run-at       document-end
@@ -74,14 +74,14 @@
   sync.innerHTML = `
     <summary>GitHub 同步</summary>
     <div class="ncmsync-panel">
-      <strong>上传歌单到 GitHub</strong>
+      <strong>上传网易云数据到 GitHub</strong>
       <label>GitHub Token${field('token', 'github_pat_…', true)}</label>
       <label>仓库地址${field('repo', 'https://github.com/owner/repo')}</label>
       <div class="ncmsync-row">
         <label>分支（可选）${field('branch', '默认分支')}</label>
         <label>文件目录（可选）${field('path', DEFAULT_DIR)}</label>
       </div>
-      <div class="ncmsync-actions"><button type="button" data-action="save">保存</button><button type="button" data-action="upload">上传歌单</button></div>
+      <div class="ncmsync-actions"><button type="button" data-action="save">保存</button><button type="button" data-action="upload">上传</button></div>
       <p role="status" aria-live="polite"></p>
     </div>`;
   head.after(sync);
@@ -107,9 +107,13 @@
     return config;
   }
 
-  async function neteaseApi(path) {
+  async function neteaseApi(path, retries = 3) {
     const response = await fetch(path, { credentials: 'include' });
     const json = await response.json().catch(() => null);
+    if (json?.code === 405 && retries > 0) {
+      await sleep((4 - retries) * 10000);
+      return neteaseApi(path, retries - 1);
+    }
     if (!response.ok || !json || json.code !== 200) throw new Error(`网易云返回 ${json?.code ?? response.status}：${json?.message || json?.msg || '请求失败'}`);
     return json;
   }
@@ -203,11 +207,169 @@
     return ['# 听歌排行', '', '## 所有时间', '', ...table(ranking.allTime), '', '## 最近一周', '', ...table(ranking.week), ''].join('\n');
   }
 
-  function overviewMarkdown(user, exportedAt, created, subscribed, ranking) {
+  const localDateTime = time => {
+    if (!time) return null;
+    const date = new Date(time);
+    return `${localDate(time)} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+  };
+  const httpsUrl = url => (url ? url.replace(/^http:\/\//, 'https://') : null);
+  const EVENT_KINDS = { 13: '分享歌单', 17: '分享播客节目', 18: '分享单曲', 19: '分享专辑', 21: '分享 MV', 22: '转发', 35: '图文', 39: '视频', 41: '视频', 56: '分享链接' };
+
+  function eventResource(type, body) {
+    if (body.song) return { kind: '单曲', name: body.song.name, by: artists(body.song).join(' / '), url: `https://music.163.com/#/song?id=${body.song.id}` };
+    if (body.album) return { kind: '专辑', name: body.album.name, by: body.album.artist?.name || artists(body.album).join(' / '), url: `https://music.163.com/#/album?id=${body.album.id}` };
+    if (body.playlist) return { kind: '歌单', name: body.playlist.name, by: body.playlist.creator?.nickname || null, url: `https://music.163.com/#/playlist?id=${body.playlist.id}` };
+    if (body.program) return { kind: '播客节目', name: body.program.name, by: body.program.radio?.name || null, url: `https://music.163.com/#/program?id=${body.program.id}` };
+    if (body.mv) return { kind: 'MV', name: body.mv.name, by: body.mv.artistName || null, url: `https://music.163.com/#/mv?id=${body.mv.id}` };
+    if (body.resource) return { kind: '链接', name: body.resource.title || null, by: null, url: body.resource.webviewUrl || null };
+    if (type === 22 && body.event) return { kind: '转发的动态', name: null, by: body.event.user?.nickname || null, url: null };
+    return null;
+  }
+
+  function eventEntry(event, userId) {
+    let body = {};
+    try { body = JSON.parse(event.json || '{}') || {}; } catch { /* 无法解析的动态只保留图片和计数 */ }
+    return {
+      id: event.id,
+      date: localDateTime(event.eventTime),
+      kind: EVENT_KINDS[event.type] || `类型 ${event.type}`,
+      text: body.msg || '',
+      resource: eventResource(event.type, body),
+      pictures: (event.pics || []).map(pic => ({ url: httpsUrl(pic.originUrl), width: pic.width ?? null, height: pic.height ?? null })),
+      likes: event.info?.likedCount ?? null,
+      comments: event.info?.commentCount ?? null,
+      shares: event.info?.shareCount ?? null,
+      location: event.ipLocation?.location || null,
+      url: `https://music.163.com/#/event?id=${event.id}&uid=${userId}`,
+    };
+  }
+
+  async function userEvents(userId) {
+    const events = [];
+    for (let time = -1; ;) {
+      const page = await neteaseApi(`/api/event/get/${userId}?limit=100&time=${time}&getcounts=true`);
+      events.push(...(page.events || []));
+      if (!page.more || !page.events?.length) break;
+      time = page.lasttime;
+      await sleep(300);
+    }
+    return events
+      .filter(event => event.user?.userId === userId)
+      .map(event => eventEntry(event, userId))
+      .filter(event => event.kind !== '转发' || event.text);
+  }
+
+  function eventsMarkdown(user, events) {
+    const lines = [`# ${markdownText(user.nickname)} 的动态`, '', `共 ${events.length} 条，只收录本人发布的动态；没有附言的转发不收录。`, ''];
+    events.forEach(event => {
+      lines.push(`## ${event.date ?? ''} · ${event.kind}`, '');
+      if (event.text) lines.push(event.text.replace(/\n+/g, '  \n'), '');
+      if (event.resource) {
+        const name = markdownText(event.resource.name || event.resource.kind);
+        lines.push(`- ${event.resource.kind}：${event.resource.url ? `[${name}](${event.resource.url})` : name}${event.resource.by ? `（${markdownText(event.resource.by)}）` : ''}`);
+      }
+      event.pictures.forEach((picture, index) => lines.push(`- 图片 ${index + 1}：${picture.url}`));
+      lines.push(`- 点赞 ${event.likes ?? 0} · 评论 ${event.comments ?? 0} · 分享 ${event.shares ?? 0}${event.location ? ` · ${event.location}` : ''} · [原动态](${event.url})`, '');
+    });
+    return lines.join('\n');
+  }
+
+  function radioInfo(radio) {
+    return {
+      id: radio.id,
+      name: radio.name,
+      description: radio.desc || null,
+      category: [radio.category, radio.secondCategory].filter(Boolean).join(' / ') || null,
+      dj: radio.dj?.nickname || null,
+      programCount: radio.programCount ?? null,
+      subscribers: radio.subCount ?? null,
+      playCount: radio.playCount ?? null,
+      createdAt: localDate(radio.createTime),
+      url: `https://music.163.com/#/djradio?id=${radio.id}`,
+    };
+  }
+
+  async function pagedRadios(path) {
+    const radios = [];
+    for (let offset = 0; ; offset += 100) {
+      const page = await neteaseApi(`${path}${path.includes('?') ? '&' : '?'}limit=100&offset=${offset}`);
+      radios.push(...(page.djRadios || []));
+      if (!page.hasMore || !page.djRadios?.length) break;
+    }
+    return radios;
+  }
+
+  async function radioPrograms(id) {
+    const programs = [];
+    for (let offset = 0; ; offset += 100) {
+      const page = await neteaseApi(`/api/dj/program/byradio?radioId=${id}&limit=100&offset=${offset}&asc=true`);
+      programs.push(...(page.programs || []));
+      if (!page.more || !page.programs?.length) break;
+      await sleep(300);
+    }
+    return programs.map(program => ({
+      number: program.serialNum ?? null,
+      id: program.id,
+      name: program.name,
+      description: program.description || null,
+      song: program.mainSong ? { name: program.mainSong.name, artists: artists(program.mainSong) } : null,
+      duration: formatDuration(program.duration),
+      listeners: program.listenerCount ?? null,
+      createdAt: localDate(program.createTime),
+      url: `https://music.163.com/#/program?id=${program.id}`,
+    }));
+  }
+
+  function radioMarkdown(info, programs) {
+    return [
+      `# ${markdownText(info.name)}`,
+      '',
+      ...(info.description ? [info.description.replace(/\n+/g, '  \n'), ''] : []),
+      `- 节目：${programs.length} 期`,
+      ...(info.category ? [`- 分类：${markdownText(info.category)}`] : []),
+      `- 订阅：${info.subscribers ?? ''}，播放：${info.playCount ?? ''}`,
+      `- 创建：${info.createdAt ?? ''}`,
+      `- 链接：${info.url}`,
+      '',
+      '| 期 | 节目 | 歌曲 | 时长 | 收听 | 发布日期 |',
+      '| ---: | --- | --- | ---: | ---: | --- |',
+      ...programs.map(program => `| ${program.number ?? ''} | [${markdownText(program.name)}](${program.url}) | ${program.song ? markdownText(`${program.song.name} - ${program.song.artists.join(' / ')}`) : ''} | ${program.duration ?? ''} | ${program.listeners ?? ''} | ${program.createdAt ?? ''} |`),
+      '',
+    ].join('\n');
+  }
+
+  function podcastHistory(list) {
+    return (list || []).map(item => {
+      const program = item.data?.pubDJProgramData || {};
+      return {
+        playedAt: localDateTime(item.playTime),
+        id: program.id ?? item.resourceId,
+        name: program.name || null,
+        radio: program.radio?.name || null,
+        duration: formatDuration(program.duration),
+        url: `https://music.163.com/#/program?id=${program.id ?? item.resourceId}`,
+      };
+    });
+  }
+
+  function podcastHistoryMarkdown(history) {
+    return [
+      '# 播客收听记录',
+      '',
+      `网易云保留的最近 ${history.length} 条，新的在前。`,
+      '',
+      '| 收听时间 | 节目 | 播客 | 时长 |',
+      '| --- | --- | --- | ---: |',
+      ...history.map(item => `| ${item.playedAt ?? ''} | [${markdownText(item.name || `节目 ${item.id}`)}](${item.url}) | ${markdownText(item.radio)} | ${item.duration ?? ''} |`),
+      '',
+    ].join('\n');
+  }
+
+  function overviewMarkdown(user, exportedAt, created, subscribed, ranking, events, radios, subscribedRadios, history) {
     return [
       `# ${markdownText(user.nickname)} 的网易云音乐`,
       '',
-      `导出时间：${exportedAt}。自建歌单 ${created.length} 个，收藏歌单 ${subscribed.length} 个。[听歌排行](ranking.md)：所有时间 ${ranking.allTime.length} 首，最近一周 ${ranking.week.length} 首。`,
+      `导出时间：${exportedAt}。自建歌单 ${created.length} 个，收藏歌单 ${subscribed.length} 个。[听歌排行](ranking.md)：所有时间 ${ranking.allTime.length} 首，最近一周 ${ranking.week.length} 首。[动态](events.md) ${events.length} 条。自建播客 ${radios.length} 个，订阅播客 ${subscribedRadios.length} 个，[播客收听记录](podcast-history.md) ${history.length} 条。`,
       '',
       '## 自建歌单',
       '',
@@ -220,6 +382,18 @@
       '| 歌单 | 创建者 | 歌曲 | 简介 |',
       '| --- | --- | ---: | --- |',
       ...subscribed.map(info => `| [${markdownText(info.name)}](${info.url}) | ${markdownText(info.creator)} | ${info.trackCount} | ${markdownText(info.description)} |`),
+      '',
+      '## 自建播客',
+      '',
+      '| 播客 | 节目 | 订阅 | 分类 | 简介 |',
+      '| --- | ---: | ---: | --- | --- |',
+      ...radios.map(info => `| [${markdownText(info.name)}](podcasts/${info.id}.md) | ${info.programTotal} | ${info.subscribers ?? ''} | ${markdownText(info.category)} | ${markdownText(info.description).slice(0, 80)} |`),
+      '',
+      '## 订阅播客',
+      '',
+      '| 播客 | 主播 | 节目 | 分类 | 简介 |',
+      '| --- | --- | ---: | --- | --- |',
+      ...subscribedRadios.map(info => `| [${markdownText(info.name)}](${info.url}) | ${markdownText(info.dj)} | ${info.programCount ?? ''} | ${markdownText(info.category)} | ${markdownText(info.description).slice(0, 80)} |`),
       '',
     ].join('\n');
   }
@@ -321,8 +495,30 @@
       const [allTime, week] = await Promise.all([0, 1].map(type => neteaseApi(`/api/v1/play/record?uid=${profile.userId}&type=${type}`)));
       const ranking = { allTime: rankingEntries(allTime.allData), week: rankingEntries(week.weekData) };
       const user = { id: profile.userId, nickname: profile.nickname };
+      status.textContent = '正在读取动态…';
+      const events = await userEvents(profile.userId);
+      status.textContent = '正在读取播客…';
+      const ownRadios = (await pagedRadios(`/api/djradio/get/byuser?userId=${profile.userId}`)).filter(radio => radio.dj?.userId === profile.userId);
+      const radios = [];
+      for (const [index, radio] of ownRadios.entries()) {
+        status.textContent = `正在读取播客 ${index + 1} / ${ownRadios.length}：${radio.name}`;
+        const info = radioInfo(radio);
+        const programs = await radioPrograms(radio.id);
+        radios.push({ ...info, programTotal: programs.length });
+        files.push(
+          { path: `${base}/podcasts/${info.id}.json`, content: `${JSON.stringify({ source: 'netease', exportedAt, ...info, programs }, null, 2)}\n` },
+          { path: `${base}/podcasts/${info.id}.md`, content: radioMarkdown(info, programs) },
+        );
+      }
+      const subscribedRadios = (await pagedRadios('/api/djradio/get/subed?total=true')).map(radioInfo);
+      const history = podcastHistory((await neteaseApi('/api/play-record/voice/list?limit=1000')).data?.list);
       files.push(
-        { path: `${base}/README.md`, content: overviewMarkdown(user, exportedAt, created, subscribed, ranking) },
+        { path: `${base}/README.md`, content: overviewMarkdown(user, exportedAt, created, subscribed, ranking, events, radios, subscribedRadios, history) },
+        { path: `${base}/events.json`, content: `${JSON.stringify({ source: 'netease', exportedAt, total: events.length, events }, null, 2)}\n` },
+        { path: `${base}/events.md`, content: eventsMarkdown(user, events) },
+        { path: `${base}/subscribed-podcasts.json`, content: `${JSON.stringify({ source: 'netease', exportedAt, total: subscribedRadios.length, podcasts: subscribedRadios }, null, 2)}\n` },
+        { path: `${base}/podcast-history.json`, content: `${JSON.stringify({ source: 'netease', exportedAt, total: history.length, history }, null, 2)}\n` },
+        { path: `${base}/podcast-history.md`, content: podcastHistoryMarkdown(history) },
         { path: `${base}/subscribed.json`, content: `${JSON.stringify({ source: 'netease', exportedAt, total: subscribed.length, playlists: subscribed }, null, 2)}\n` },
         { path: `${base}/ranking.json`, content: `${JSON.stringify({ source: 'netease', exportedAt, ...ranking }, null, 2)}\n` },
         { path: `${base}/ranking.md`, content: rankingMarkdown(ranking) },
@@ -330,9 +526,9 @@
       status.textContent = `正在上传 ${files.length} 个文件…`;
       const branch = await commitFiles({
         token: config.token, ...repository, branch: config.branch, files,
-        message: `Update NetEase Music playlists (${created.length} created, ${subscribed.length} subscribed)`,
+        message: `Update NetEase Music data (${created.length} playlists, ${events.length} events, ${radios.length} podcasts)`,
       });
-      status.textContent = `已上传自建歌单 ${created.length} 个、收藏歌单 ${subscribed.length} 个和听歌排行到 ${repository.owner}/${repository.repo}@${branch}：\n${base}/`;
+      status.textContent = `已上传自建歌单 ${created.length} 个、收藏歌单 ${subscribed.length} 个、听歌排行、动态 ${events.length} 条、自建播客 ${radios.length} 个、订阅播客 ${subscribedRadios.length} 个和播客收听记录到 ${repository.owner}/${repository.repo}@${branch}：\n${base}/`;
     } catch (error) {
       status.textContent = `上传失败：${error.message}`;
     } finally {
