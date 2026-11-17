@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GitHub PR Tab — Compact Number + Status Color
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      3.10.0
+// @version      3.11.0
 // @description  Show the PR/Issue number in the browser tab (compact) and color the favicon by status (stacked/non-main base, CI failure, conflict, approved, draft, open).
 // @author       muzi-xiaoren
 // @match        https://github.com/*
@@ -64,16 +64,15 @@
   }
 
   // base 分支名（PR 头部 “…into BASE from HEAD” 的 BASE）。
-  // 新版 React UI：分支摘要块 PullRequestHeaderSummary 里第一个 /tree/ 链接就是 base
-  // （into 一侧先渲染）；读不到就返回 null（如 Files/Commits 子页），不据此判色。
+  // 2026-11 新版头部：base 链接在 baseBranchGroup 里；再早一版在 PullRequestHeaderSummary
+  // 里且 base 先渲染。读不到就返回 null（如 Files/Commits 子页），不据此判色。
   function getBaseBranch() {
-    const summary = document.querySelector('[class*="PullRequestHeaderSummary"]');
-    if (summary) {
-      const a = summary.querySelector('a[href*="/tree/"]');
-      if (a) {
-        const m = (a.getAttribute('href') || '').match(/\/tree\/(.+)$/);
-        if (m) return decodeURIComponent(m[1]);
-      }
+    const link = document.querySelector('[class*="baseBranchGroup"] a[href*="/tree/"]')
+              || document.querySelector('[class*="PullRequestHeaderSummary"] a[href*="/tree/"]')
+              || document.querySelector('[class*="branchName"] a[href*="/tree/"]');
+    if (link) {
+      const m = (link.getAttribute('href') || '').match(/\/tree\/(.+)$/);
+      if (m) return decodeURIComponent(m[1]);
     }
     // 旧版兜底：.base-ref 的 title 形如 "owner:branch"
     const old = document.querySelector('.base-ref');
@@ -84,10 +83,32 @@
     return null;
   }
 
-  // 合并框（仅 PR 会话页 /pull/N 存在；其它子页读不到 CI/审查状态）
+  // 旧版合并框；新版只在点开 “Merge status” 弹层时才渲染
   function getMergeBox() {
     return document.querySelector('[data-testid="mergebox-partial"]')
         || document.querySelector('[data-testid="mergebox-border-container"]');
+  }
+
+  // 新版头部 “Merge status” 按钮的提示文字，如
+  // "Merge conflicts need to be resolved. …" / "Waiting for a reviewer's approval. …"
+  function getMergeStatusTip() {
+    const btn = document.querySelector('button[data-dd-action-name="pull_requests.merge.view_status"]');
+    if (!btn) return '';
+    const tip = document.getElementById(btn.getAttribute('aria-describedby') || '');
+    return (tip?.textContent || btn.getAttribute('aria-label') || '').trim();
+  }
+
+  const has = testid => !!document.querySelector(`[data-testid="${testid}"]`);
+
+  // 必需检查是否有失败：进度条有 checks-progress-required-failure 段，或其 aria-label 里
+  // 有不带 optional 的 "N … failing"，如 "… 4 optional failing checks, 1 required failing check"。
+  // optional 失败不拦合并，不算。
+  function hasRequiredFailure() {
+    if (has('checks-progress-required-failure') || has('checks-progress-failure')) return true;
+    const label = document.querySelector('section[data-testid="mini-status"] [role="img"][aria-label*="checks"]')
+      ?.getAttribute('aria-label') || '';
+    return [...label.matchAll(/(\d+) (optional |required )?failing/gi)]
+      .some(m => m[2]?.toLowerCase() !== 'optional ' && Number(m[1]) > 0);
   }
 
   // 综合判定 favicon 颜色
@@ -103,19 +124,22 @@
     const base = getBaseBranch();
     if (base && base !== 'main' && base !== 'master') return 'gray';
 
+    // 新版：头部的检查/审批进度条 + “Merge status” 按钮提示，常驻页面无需点开。
+    // 只有必需检查失败才标红。
+    if (hasRequiredFailure()) return 'red';
+    const tip = getMergeStatusTip();
+    if (/conflict/i.test(tip)) return 'red';
+    // approve 是明确正向信号：走 trunk 合并队列时提示会一直是 "Merging is currently blocked"，不据此否掉
+    if (has('reviews-progress-fulfilled')
+        && !has('reviews-progress-outstanding') && !has('reviews-progress-pending')) return 'orange';
+    if (/ready to merge|can be merged|able to merge/i.test(tip)) return 'orange';
+
+    // 旧版合并框。它的 "Some checks were not successful" 分不出必需/optional，不再据此标红
     const box = getMergeBox();
     if (box) {
       const text = box.textContent || '';
-      // CI 有失败的检查 -> 红（覆盖 open / draft）
-      if (/were not successful|checks? have failed|\d+\s*failing/i.test(text)) return 'red';
-      // 有冲突 -> 红（即使已 approve / 无需再 approve 也要提示去解冲突）
       if (/conflicts that must be resolved|has conflicts/i.test(text)) return 'red';
-      // 有人 approve -> 橙。这是"明确正向信号"，不再拿 blocked 否掉它：
-      // 走 trunk 合并队列后，检查跑完前 GitHub 一直挂着 "Merging is blocked"，
-      // 旧的 !blocked 门槛会把已 approve 的 PR 一路压成绿色。
       if (/changes approved|approved these changes/i.test(text)) return 'orange';
-      // 没 approve 但已经能合 -> 也算正向信号。这条仍要求没有 blocked：
-      // 它靠"没有拦截文字"推断，合并框半加载时会先闪一下橙再变回绿。
       const blocked   = /merging is blocked/i.test(text);
       const mergeable = /merging can be performed|no conflicts with base branch/i.test(text);
       if (!blocked && mergeable) return 'orange';

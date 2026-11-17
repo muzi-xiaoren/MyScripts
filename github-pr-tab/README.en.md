@@ -14,17 +14,17 @@ The favicon color is decided by priority (high → low):
 | 1 | Merged | 🟣 Purple `#8250df` |
 | 2 | Closed (not merged) | 🔴 Red `#cf222e` |
 | 3 | Stacked: base is not the trunk (`main`/`master`) but another branch | ⚪ Gray `#6e7781` |
-| 4 | CI has a failed check | 🔴 Red `#cf222e` |
+| 4 | A **required** check failed (optional failures are ignored; they don't block merging) | 🔴 Red `#cf222e` |
 | 5 | Has conflicts (must be resolved to merge) | 🔴 Red `#cf222e` |
 | 6 | Someone approved, or merge is no longer blocked | 🟠 Orange `#f66a0a` |
 | 7 | Draft (none of the above) | ⚫ Black `#000000` |
 | 8 | Open (none of the above) | 🟢 Green `#1f883d` |
 
-> **An approval is an explicit positive signal and ignores `blocked`**: with a trunk merge queue, GitHub keeps showing `Merging is blocked` until the checks finish. So as soon as the merge box says `Changes approved`, the favicon turns orange without requiring "not blocked" — otherwise approved PRs would stay green. Conversely, "not approved but already mergeable" is *inferred* from the absence of blocking text, so it still requires "not blocked" to avoid an orange flash while the merge box is half-loaded.
+> **An approval is an explicit positive signal and ignores `blocked`**: with a trunk merge queue, GitHub keeps showing `Merging is blocked` until the checks finish. So as soon as the approvals bar is fulfilled (`reviews-progress-fulfilled`, nothing outstanding), the favicon turns orange without requiring "not blocked" — otherwise approved PRs would stay green. Conversely, "not approved but already mergeable" is *inferred* from the absence of blocking text, so it still requires "not blocked" to avoid an orange flash while the merge box is half-loaded.
 
 > **Gray (stacked) beats red**: a PR stacked on another branch has a "provisional" merge state — it's only truly evaluated once its base lands on the trunk, so its conflicts / CI are ignored for now and it's grayed out as "not my concern yet". Only PRs that actually target the trunk turn red on conflict / CI failure.
 >
-> CI and review/merge status can only be read on the **PR conversation page** (`/pull/N`, where the merge box lives); on Files / Commits sub-tabs only the base color (open/draft/merged/closed) applies.
+> CI and review/merge status can only be read on the **PR conversation page** (`/pull/N`, where the header shows the checks / approvals bars and the "Merge status" button); on Files / Commits sub-tabs only the base color (open/draft/merged/closed) applies.
 >
 > ⚫ Black may be hard to see on a dark tab strip — change `COLORS.black` in the script if so.
 
@@ -65,8 +65,15 @@ const COLORS = {
 ## How it works
 
 - Extracts the number from the URL path `…/pull/123` or `…/issues/123` and rewrites `document.title`.
-- Reads the header state badge (the octicon inside `[class*="StateLabel"]`) for open / draft / merged / closed, then reads the merge box (`[data-testid="mergebox-partial"]`) text for CI and review/merge status, and draws a colored circle with `<canvas>` to replace the favicon.
-- GitHub is an SPA (Turbo navigation), so it uses a `MutationObserver` on both `<head>` (title) and `<body>` (the async-loaded, live-updating merge box / status), plus `turbo:load` / `pjax:end` and `visibilitychange` listeners, to keep working after navigation and status changes.
+- Reads the header state badge (the octicon inside `[class*="StateLabel"]`) for open / draft / merged / closed, then reads the always-present header status (since the 2026-11 redesign the merge box only renders when "Merge status" is opened):
+  - base branch: the `/tree/` link inside `[class*="baseBranchGroup"]`;
+  - required check failure: the `checks-progress-required-failure` segment, or `N required failing` in the checks bar aria-label;
+  - conflict: the "Merge status" button tooltip contains `conflict`;
+  - approved: a `reviews-progress-fulfilled` segment with no `outstanding` / `pending`;
+  - the old merge box (`[data-testid="mergebox-partial"]`) is kept as a fallback.
+
+  It then draws a colored SVG circle to replace the favicon.
+- GitHub is an SPA (Turbo navigation), so it uses a `MutationObserver` on both `<head>` (title) and `<body>` (the async-loaded, live-updating status bars), plus `turbo:load` / `pjax:end` and `visibilitychange` listeners, to keep working after navigation and status changes.
 
 > Purely local rendering; nothing is sent to GitHub.
 
