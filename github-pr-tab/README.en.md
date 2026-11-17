@@ -20,7 +20,7 @@ The favicon color is decided by priority (high → low):
 | 7 | Draft (none of the above) | ⚫ Black `#000000` |
 | 8 | Open (none of the above) | 🟢 Green `#1f883d` |
 
-> **An approval is an explicit positive signal and ignores `blocked`**: with a trunk merge queue, GitHub keeps showing `Merging is blocked` until the checks finish. So as soon as the approvals bar is fulfilled (`reviews-progress-fulfilled`, nothing outstanding), the favicon turns orange without requiring "not blocked" — otherwise approved PRs would stay green. Conversely, "not approved but already mergeable" is *inferred* from the absence of blocking text, so it still requires "not blocked" to avoid an orange flash while the merge box is half-loaded.
+> **An approval is an explicit positive signal and ignores `blocked`**: with a trunk merge queue, GitHub keeps showing `Merging is blocked` until the checks finish. So as soon as the approvals bar is fulfilled (`reviews-progress-fulfilled`, nothing outstanding; reviewers who have not reviewed yet do not matter), the favicon turns orange without requiring "not blocked" — otherwise approved PRs would stay green. Conversely, "not approved but already mergeable" is *inferred* from the absence of blocking text, so it still requires "not blocked" to avoid an orange flash while the merge box is half-loaded.
 
 > **Gray (stacked) beats red**: a PR stacked on another branch has a "provisional" merge state — it's only truly evaluated once its base lands on the trunk, so its conflicts / CI are ignored for now and it's grayed out as "not my concern yet". Only PRs that actually target the trunk turn red on conflict / CI failure.
 >
@@ -69,7 +69,8 @@ const COLORS = {
   - base branch: the `/tree/` link inside `[class*="baseBranchGroup"]`;
   - required check failure: the `checks-progress-required-failure` segment, or `N required failing` in the checks bar aria-label;
   - conflict: the "Merge status" button tooltip contains `conflict`;
-  - approved: a `reviews-progress-fulfilled` segment with no `outstanding` / `pending`;
+  - approved: a `reviews-progress-fulfilled` segment with no `outstanding` (a leftover `pending` reviewer is fine);
+  - someone approved but requirements are not met yet (e.g. a code-owner team is still missing): the green check (`octicon-check`) on that reviewer's row in the Reviewers sidebar;
   - the old merge box (`[data-testid="mergebox-partial"]`) is kept as a fallback.
 
   It then draws a colored SVG circle to replace the favicon.

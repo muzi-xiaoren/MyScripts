@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GitHub PR Tab — Compact Number + Status Color
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      3.11.0
+// @version      3.11.2
 // @description  Show the PR/Issue number in the browser tab (compact) and color the favicon by status (stacked/non-main base, CI failure, conflict, approved, draft, open).
 // @author       muzi-xiaoren
 // @match        https://github.com/*
@@ -129,9 +129,13 @@
     if (hasRequiredFailure()) return 'red';
     const tip = getMergeStatusTip();
     if (/conflict/i.test(tip)) return 'red';
-    // approve 是明确正向信号：走 trunk 合并队列时提示会一直是 "Merging is currently blocked"，不据此否掉
-    if (has('reviews-progress-fulfilled')
-        && !has('reviews-progress-outstanding') && !has('reviews-progress-pending')) return 'orange';
+    // approve 是明确正向信号：走 trunk 合并队列时提示会一直是 "Merging is currently blocked"，不据此否掉。
+    // 审批要求已满足（fulfilled）且没有未满足的要求（outstanding）即可；
+    // pending 只是还有被请求的人没审，不拦合并。
+    if (has('reviews-progress-fulfilled') && !has('reviews-progress-outstanding')) return 'orange';
+    // 有人 approve 但审批要求还没满足（如还差 code owner 团队）也算：右栏 Reviewers 里
+    // 该 reviewer 那一行带绿色对勾（octicon-check，提示 "<reviewer> approved these changes"）
+    if (document.querySelector('section[aria-label="Reviewers"] li svg.octicon-check')) return 'orange';
     if (/ready to merge|can be merged|able to merge/i.test(tip)) return 'orange';
 
     // 旧版合并框。它的 "Some checks were not successful" 分不出必需/optional，不再据此标红

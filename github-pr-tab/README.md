@@ -20,7 +20,7 @@ favicon 颜色按优先级判定（高 → 低）：
 | 7 | Draft（无上述情况） | ⚫ 黑 `#000000` |
 | 8 | Open（无上述情况） | 🟢 绿 `#1f883d` |
 
-> **approve 是"明确正向信号"，不受 blocked 影响**：走 trunk 合并队列时，检查跑完前 GitHub 会一直挂着 `Merging is blocked`。所以只要审批进度条显示已满足（`reviews-progress-fulfilled`，没有待审），就直接判橙，不再要求"没有 blocked"——否则已 approve 的 PR 会一路显示绿色。反之，"没 approve 但已经能合"是靠没有拦截文字**推断**出来的，仍要求没有 blocked，避免合并框半加载时闪一下橙。
+> **approve 是"明确正向信号"，不受 blocked 影响**：走 trunk 合并队列时，检查跑完前 GitHub 会一直挂着 `Merging is blocked`。所以只要审批进度条显示已满足（`reviews-progress-fulfilled`，没有未满足的审批要求；还有人没审不影响），就直接判橙，不再要求"没有 blocked"——否则已 approve 的 PR 会一路显示绿色。反之，"没 approve 但已经能合"是靠没有拦截文字**推断**出来的，仍要求没有 blocked，避免合并框半加载时闪一下橙。
 
 > **灰色（stacked）优先于红色**：叠在别的分支上的 PR，其合并态是「临时」的——等它的 base 合入主干后才真正评估，所以此刻的冲突 / CI 都先不当回事，用灰色标成「暂不关注」。只有真正冲着主干合的 PR，冲突 / CI 失败才会亮红。
 >
@@ -69,7 +69,8 @@ const COLORS = {
   - base 分支：`[class*="baseBranchGroup"]` 里的 `/tree/` 链接；
   - 必需检查失败：`checks-progress-required-failure` 进度条段，或检查进度条 aria-label 里的 `N required failing`；
   - 冲突：「Merge status」按钮提示文字含 `conflict`；
-  - 已批准：`reviews-progress-fulfilled` 段且没有 `outstanding` / `pending`；
+  - 已批准：`reviews-progress-fulfilled` 段且没有 `outstanding`（只剩 `pending` 待审不影响）；
+  - 有人 approve 但审批要求还没满足（比如还差 code owner 团队）：右栏 Reviewers 里该 reviewer 那一行的绿色对勾（`octicon-check`）；
   - 旧版合并框（`[data-testid="mergebox-partial"]`）仍作兜底。
 
   然后画对应颜色的 SVG 圆形替换 favicon。
