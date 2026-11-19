@@ -2,6 +2,8 @@
 
 # PT 助手 · 不可躺
 
+> **已归档**：本脚本不再维护，仅留存代码。
+
 [www.tangpt.top](https://www.tangpt.top/) 的每日流程助手。**每一步一个独立开关**，关掉某步流程会直接跳到下一步：
 
 ```js
@@ -65,7 +67,7 @@ const FEATURES = {
 
 ## 安装
 
-需先安装 [Tampermonkey](https://www.tampermonkey.net/)，然后 [点此安装脚本](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-tangpt-helper/pt-tangpt-helper.user.js)。
+需先安装 [Tampermonkey](https://www.tampermonkey.net/)，然后 [点此安装脚本](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/archive/pt-tangpt-helper/pt-tangpt-helper.user.js)。
 
 ## 配置
 
@@ -79,7 +81,7 @@ const FEATURES = {
 | `MAIL.unreadDeletePrefix` | `'任务'` | 未读邮件只删这个标题前缀的 |
 | `LOTTERY.drawCount` | `100` | 点哪个按钮（站点只有 1 / 10 / 20 / 50 / 100） |
 | `LOTTERY.maxDrawsPerDay` | `10` | 一天点几轮，即最多 `drawCount × 这个数` 抽。一次一百连抽是 200 万魔力，这个上限是防手滑。站点自己的「今天还可以抽 N 次」更少时以站点为准 |
-| `TASK.dailyName` / `monthlyName` | `'苍蝇腿'` / `'VIP'` | 按任务名首字匹配 |
+| `TASK.dailyName` / `monthlyName` | `'苍蝇腿'` / `'VIP'` | 按任务名前缀匹配 |
 | `SLOT.spins` | `2` | 老虎机开转次数 |
 
 ## 原理

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PT 签到 · GGPT
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      1.0.0
+// @version      1.0.1
 // @description  打开 GGPT(GameGamePT) 时自动检测签到状态：未签到就签到并原地刷新，已签到则什么都不做。
 // @author       muzi-xiaoren
 // @match        https://www.gamegamept.com/*
@@ -17,7 +17,7 @@
 (function () {
   'use strict';
 
-  // 【配置】签到成功后停留 / 跳转到的页面。留空 '' 则只刷新触发签到的当前页（GGPT 无返回要求，故留空）。
+  // 【配置】签到成功后停留 / 跳转到的页面。留空 '' 则只刷新触发签到的当前页。
   const RETURN_TO = '';
   // 网络抗抖：单次请求超时(毫秒) + 失败最多重试次数（线性退避）。
   const FETCH_TIMEOUT = 8000;
@@ -44,13 +44,12 @@
     throw lastErr;
   }
 
-  // NexusPHP 有三种签到入口：
-  //   ① AJAX 变体（如 PTerClub）：未签 <a id="do-attendance" data-url="attendance-ajax.php">；已签后该节点消失。
-  //   ② 经典 faqlink 变体（如 Mua / KamePT / NicePT / GGPT）：未签 <a class="faqlink" href="attendance.php">[…签到…]</a>；
-  //      已签后 faqlink class 被清空（各站「已签」文字不同：mua「已签到」、kamept/GGPT「签到已得」），靠 faqlink 结构判断。
-  //   ③ 带 type 参数变体（如 PTtime）：未签 <a href="attendance.php?type=sign&uid=..">签到领魔力</a>；
-  //      已签后变 <a href="attendance.php?type=list">签到详情</a>，靠 href 的 type=sign 判断。
-  // 取到「未签入口」就签，取不到（已签 / 无入口）就什么都不做。
+  // NexusPHP 签到入口有多种写法，统一探测（取到「未签入口」就签，取不到=已签/无入口 → 什么都不做）：
+  //   ① AJAX 变体（PTerClub）：<a id="do-attendance" data-url="attendance-ajax.php">。
+  //   ② 经典 faqlink 变体（KamePT/NicePT/GGPT/CarPT/Dubhe/HDFans/PTSKit）：<a class="faqlink" href="attendance.php">；已签后 faqlink class 被清空，靠结构判断。
+  //   ③ 带 type 参数变体（PTtime）：<a href="attendance.php?type=sign&uid=..">；已签变 type=list，靠 type=sign 判断。
+  //   ④ BTSchool 每日签到插件：<a href="index.php?action=addbonus">每日签到</a>；已签后该链接消失。
+  //   ⑤ not-attended 图标变体（CSPT/财神）：<a class="not-attended" href="attendance.php">；已签后 class 变 attended，靠 not-attended 判断。
   const ajaxLink = document.querySelector('#do-attendance');
   const classicLink = document.querySelector('a.faqlink[href*="attendance.php"]');
   const signParamLink = Array.prototype.find.call(
@@ -63,12 +62,18 @@
       }
     }
   );
+  const addbonusLink = document.querySelector('a[href*="action=addbonus"]');
+  const notAttendedLink = document.querySelector('a.not-attended[href*="attendance.php"]');
   const endpoint = ajaxLink
     ? (ajaxLink.getAttribute('data-url') || 'attendance-ajax.php')
     : classicLink
     ? classicLink.getAttribute('href')
     : signParamLink
     ? signParamLink.getAttribute('href')
+    : addbonusLink
+    ? addbonusLink.getAttribute('href')
+    : notAttendedLink
+    ? notAttendedLink.getAttribute('href')
     : null;
   if (!endpoint) return; // 已签到 / 当前页无签到入口 → 不签、不跳、不刷
 

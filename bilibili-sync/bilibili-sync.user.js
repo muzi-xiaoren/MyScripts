@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         哔哩同步 BilibiliSync — B 站投稿、动态、收藏夹和关注上传到 GitHub
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      1.1.0
+// @version      1.1.1
 // @description  在 B 站页面左下角加入「GitHub 同步」，把自己的投稿视频（含字幕、B 站识别的 BGM 和 AI 总结）、动态全文、全部自建收藏夹和关注列表，上传到 GitHub 带时间戳的目录。
 // @author       muzi-xiaoren
 // @match        https://www.bilibili.com/*
@@ -186,16 +186,20 @@
   const videoUrl = bvid => `https://www.bilibili.com/video/${bvid}`;
 
   function markdownText(value) {
-    return String(value ?? '').replace(/[\\|[\]]/g, '\\$&').replace(/\s+/g, ' ').trim();
+    return String(value ?? '').replace(/[\\|[\]<>*_`]/g, '\\$&').replace(/\s+/g, ' ').trim();
   }
 
   function paragraph(value) {
     return String(value ?? '').trim().replace(/\n{2,}/g, '\n').split('\n').map(line => line.trim()).join('  \n');
   }
 
+  const subtitleFailures = [];
+
   async function readSubtitle(subtitle) {
     const url = subtitle.subtitle_url.replace(/^\/\//, 'https://');
-    const json = await fetch(url).then(response => response.json());
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`字幕返回 ${response.status}`);
+    const json = await response.json();
     return {
       language: subtitle.lan_doc || subtitle.lan,
       lines: (json.body || []).map(line => ({ from: Math.round(line.from * 10) / 10, content: line.content })),
@@ -229,9 +233,14 @@
       const subtitles = [];
       const bgm = [];
       for (const page of view.pages || []) {
-        const player = await biliApi('/x/player/wbi/v2', { bvid: item.bvid, cid: page.cid }, { wbi: true });
-        const subtitle = (player.subtitle?.subtitles || []).find(entry => entry.subtitle_url);
-        if (subtitle) subtitles.push({ page: page.page, part: page.part, ...(await readSubtitle(subtitle)) });
+        // 字幕读不到不该让几分钟的导出整个作废：记一笔，最后在状态里报出来。
+        try {
+          const player = await biliApi('/x/player/wbi/v2', { bvid: item.bvid, cid: page.cid }, { wbi: true });
+          const subtitle = (player.subtitle?.subtitles || []).find(entry => entry.subtitle_url);
+          if (subtitle) subtitles.push({ page: page.page, part: page.part, ...(await readSubtitle(subtitle)) });
+        } catch (error) {
+          subtitleFailures.push(`${item.bvid}${(view.pages || []).length > 1 ? ` P${page.page}` : ''}`);
+        }
         // B 站自动识别的 BGM 只出现在带 cid 的标签接口里（视频标签栏的「发现《…》」）。
         const pageTags = await biliApi('/x/web-interface/view/detail/tag', { bvid: item.bvid, cid: page.cid }).catch(() => []);
         for (const tag of (pageTags || []).filter(entry => entry.tag_type === 'bgm' && entry.music_id)) {
@@ -600,11 +609,15 @@
         return JSON.parse(new TextDecoder().decode(bytes));
       },
       async commit(files, message) {
+        // 读取数据要几分钟，期间分支可能已有别的提交（其它同步脚本、手动 push）。
+        // 提交前重读分支头并以它为父提交，否则更新分支会因非 fast-forward 被拒，整次白跑。
+        const head = await call('GET', `/git/ref/heads/${encodeURIComponent(target)}`);
+        const base = head.object.sha === ref.object.sha ? parent : await call('GET', `/git/commits/${head.object.sha}`);
         const next = await call('POST', '/git/trees', {
-          base_tree: parent.tree.sha,
+          base_tree: base.tree.sha,
           tree: files.map(file => ({ path: file.path, mode: '100644', type: 'blob', content: file.content })),
         }, [201]);
-        const commit = await call('POST', '/git/commits', { message, tree: next.sha, parents: [ref.object.sha] }, [201]);
+        const commit = await call('POST', '/git/commits', { message, tree: next.sha, parents: [head.object.sha] }, [201]);
         await call('PATCH', `/git/refs/heads/${encodeURIComponent(target)}`, { sha: commit.sha });
       },
     };
@@ -640,6 +653,7 @@
 
       const exportedAt = new Date().toISOString();
       const base = `${dir ? `${dir}/` : ''}${uploadStamp()}`;
+      subtitleFailures.length = 0;
       const videos = await uploads(user.mid, report);
       const entries = await dynamics(user.mid, report);
       const folders = await favorites(user.mid, report);
@@ -662,7 +676,7 @@
       ];
       report(`正在上传 ${files.length} 个文件…`);
       await repo.commit(files, `Update Bilibili data (投稿 ${videos.length}, 动态 ${entries.length}, 收藏夹 ${folders.length}, 关注 ${users.length})`);
-      report(`已上传投稿 ${videos.length} 个、动态 ${entries.length} 条、收藏夹 ${folders.length} 个、关注 ${users.length} 个到 ${repository.owner}/${repository.repo}@${repo.branch}：\n${base}/`);
+      report(`已上传投稿 ${videos.length} 个、动态 ${entries.length} 条、收藏夹 ${folders.length} 个、关注 ${users.length} 个到 ${repository.owner}/${repository.repo}@${repo.branch}：\n${base}/${subtitleFailures.length ? `\n有 ${subtitleFailures.length} 个视频的字幕没读到（${subtitleFailures.join('、')}），下次上传会重试。` : ''}`);
     } catch (error) {
       report(`上传失败：${error.message}`);
     } finally {

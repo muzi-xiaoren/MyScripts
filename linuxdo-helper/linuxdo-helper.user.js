@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LINUX DO 助手
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      1.4.1
+// @version      1.4.2
 // @description  linux.do 侧边悬浮框，两个独立开关：① 刷帖：从列表页(默认 /top)从上到下逐个打开帖子，每屏等发言的小蓝点(未读标记)消失再往下滚，节奏随机，读完歇一会儿回列表点下一个 ② 领红包：站点一推送新帖就立刻扫（另有定时兜底）积分乐园的新帖，每个新帖只看一次楼主发言，找出 credit.linux.do 红包(直链 / base64 / base58 / hex / 倒序 / o→0、中文数字等变形)直接领取，需要解谜的列出来留给你。列表地址都能在悬浮框里改。
 // @author       muzi-xiaoren
 // @match        https://linux.do/*
@@ -47,7 +47,8 @@
     read: { on: false, url: 'https://linux.do/top', maxReplies: 300 },   // 回复数超过 maxReplies 的帖子跳过，0 = 不限
     rp: { on: false, url: 'https://linux.do/c/credit/106/l/new?subset=topics', interval: 60 },
   };
-  const today = new Date().toLocaleDateString('en-CA');
+  const dateNow = () => new Date().toLocaleDateString('en-CA');
+  let today = dateNow();
   const sleep = (ms) => new Promise((s) => setTimeout(s, ms));
   const rand = ([a, b]) => a + Math.random() * (b - a);
   const backoffMs = ([base, max], n) => Math.min(base * 2 ** Math.max(0, n - 1), max) * rand([0.8, 1.2]);
@@ -93,6 +94,15 @@
   }
 
   // ---------- 存储 ----------
+  // 标签页的身份：放 sessionStorage，整页刷新后还是同一个，自己占的锁不会因为刷新而丢。
+  const TAB = (() => {
+    try {
+      const k = 'mzx-linuxdo-tab';
+      const v = sessionStorage.getItem(k) || Math.random().toString(36).slice(2);
+      sessionStorage.setItem(k, v);
+      return v;
+    } catch (e) { return Math.random().toString(36).slice(2); }
+  })();
   // 配置跨天保留；当天记录（读了几个帖、领了多少）按天重置；领过的红包 id 跨天保留，避免重复请求。
   const CFG_KEY = 'mzx-linuxdo-cfg';
   const DAY_KEY = 'mzx-linuxdo-day';
@@ -100,28 +110,37 @@
   const UI_KEY = 'mzx-linuxdo-ui';
   const DONE_KEY = 'mzx-linuxdo-puzzle-done';
   const TOPICS_KEY = 'mzx-linuxdo-rp-topics';
-  const cfg = (() => {
+  const loadCfg = () => {
     const c = ls.get(CFG_KEY, {});
     return {
       read: Object.assign({}, DEFAULTS.read, c.read),
       rp: Object.assign({}, DEFAULTS.rp, c.rp),
     };
-  })();
+  };
+  const cfg = loadCfg();
   const saveCfg = () => ls.set(CFG_KEY, cfg);
   const blankDay = () => ({
     date: today,
-    read: { done: 0, visited: {}, cur: null, fails: {} },
+    read: { done: 0, visited: {}, cur: null, fails: {}, reloads: {} },
     rp: { count: 0, amount: 0 },
     puzzles: [],
     log: [],
   });
-  let day = (() => {
+  const loadDay = () => {
     const d = ls.get(DAY_KEY, null);
     if (!d || d.date !== today) return blankDay();
     const b = blankDay();
     return Object.assign(b, d, { read: Object.assign(b.read, d.read), rp: Object.assign(b.rp, d.rp) });
-  })();
+  };
+  let day = loadDay();
   const saveDay = () => ls.set(DAY_KEY, day);
+  // 标签页挂过零点：换一份新的当天记录，否则统计继续记在昨天、一刷新又全部归零。
+  const rollDay = () => {
+    if (dateNow() === today) return;
+    today = dateNow();
+    day = blankDay();
+    saveDay();
+  };
   // id → 结果；只记已经有定论的（领到 / 站点明确拒绝），网络错误和未登录不记，下轮还会再试。
   const seen = ls.get(SEEN_KEY, {});
   const saveSeen = () => {
@@ -289,7 +308,10 @@
       if (!u || u.hostname !== location.hostname) { sec.input.style.borderColor = '#f85149'; return; }
       sec.input.style.borderColor = '';
       cfg[key].url = u.href;
-      if (key === 'rp') cfg.rp.interval = Math.max(20, Number(intervalInput.value) || DEFAULTS.rp.interval);
+      if (key === 'rp') {
+        cfg.rp.interval = Math.max(20, Number(intervalInput.value) || DEFAULTS.rp.interval);
+        intervalInput.value = cfg.rp.interval;
+      }
       if (key === 'read') {
         const raw = maxRepliesInput.value.trim();
         const n = raw === '' ? NaN : Math.floor(Number(raw));
@@ -476,13 +498,16 @@
         if (waited === READ.flushAfter) flushTimings();
         readNote = `等 ${pending} 个小蓝点消失…`;
         paint();
-        await sleep(400);
-        waited += 400;
+        await sleep(500);
+        waited += 500;
         continue;
       }
 
       // ★ 蓝点超时 → 清 cf_clearance 并刷新
-      if (pending && waited >= READ.dotTimeout) {
+      // 每个帖子一天只这样刷新一次：蓝点一直不消时反复清 cookie + 整页刷新，反而最容易撞上 Cloudflare 的整页验证。
+      if (pending && waited >= READ.dotTimeout && !day.read.reloads[id]) {
+        day.read.reloads[id] = 1;
+        saveDay();
         log(`蓝点超时，尝试清除 cf_clearance 后刷新`);
         readNote = '蓝点一直不消失，正在清除 cf_clearance…';
         paint();
@@ -510,6 +535,27 @@
     return false;
   }
   let reading = false;
+  // 同一浏览器开着多个 linux.do 标签页时只让一个刷帖：占着锁的标签页每秒续一次，
+  // 超过 READ_LOCK_TTL 没续（标签页关了）别的标签页才接手。点「启动」的那个标签页直接抢过来。
+  const READ_LOCK_KEY = 'mzx-linuxdo-read-lock';
+  const READ_LOCK_TTL = 15000;
+  function holdReadLock(force) {
+    const l = ls.get(READ_LOCK_KEY, null);
+    if (!force && l && l.tab !== TAB && Date.now() - l.at < READ_LOCK_TTL) return false;
+    ls.set(READ_LOCK_KEY, { tab: TAB, at: Date.now() });
+    return true;
+  }
+  function tick() {
+    rollDay();
+    if (!cfg.read.on) return;
+    if (!holdReadLock(false)) {
+      if (!reading && readNote !== OTHER_TAB_NOTE) { readNote = OTHER_TAB_NOTE; paint(); }
+      return;
+    }
+    if (readNote === OTHER_TAB_NOTE) readNote = '';
+    readTick();
+  }
+  const OTHER_TAB_NOTE = '另一个标签页正在刷帖，这个标签页不动（要换到这里刷：点停止再点启动）';
   async function readTick() {
     if (!cfg.read.on || reading || readPaused) return;
     reading = true;
@@ -559,8 +605,11 @@
     readNote = '';
     readPaused = false;
     readFails = 0;
+    if (cfg.read.on) holdReadLock(true);
+    else if ((ls.get(READ_LOCK_KEY, null) || {}).tab === TAB) ls.set(READ_LOCK_KEY, null);
     paint();
-    if (cfg.read.on && !onReadList() && topicIdNow() !== day.read.cur) goList();
+    const id = topicIdNow();
+    if (cfg.read.on && !onReadList() && !(id && id === day.read.cur)) goList();
   };
   // ---------- 功能二：领红包 ----------
   const ID_RE = /^1\d{16,19}$/;   // credit 的红包 id 是 18 位左右的雪花号，以 1 开头
@@ -645,7 +694,7 @@
           try { b = JSON.parse(r.responseText); } catch (e) {}
           if (r.status === 401) return resolve({ login: true });
           if (r.status >= 200 && r.status < 300 && b && b.data) return resolve({ ok: true, data: b.data });
-          resolve({ ok: false, final: r.status < 500 && r.status !== 429, msg: (b && b.error_msg) || `HTTP ${r.status}` });
+          resolve({ ok: false, final: r.status < 500 && r.status !== 429 && !(r.status === 403 && !b), msg: (b && b.error_msg) || `HTTP ${r.status}` });
         },
         onerror: () => resolve({ ok: false, final: false, msg: '网络错误' }),
         ontimeout: () => resolve({ ok: false, final: false, msg: '超时' }),
@@ -666,7 +715,6 @@
   }
   // 同一浏览器开着多个 linux.do 标签页时只让一个去扫，免得同一个红包被请求好几次
   const LOCK_KEY = 'mzx-linuxdo-rp-lock';
-  const TAB = Math.random().toString(36).slice(2);
   function takeLock() {
     const l = ls.get(LOCK_KEY, null);
     if (l && l.tab !== TAB && Date.now() - l.at < cfg.rp.interval * 1000 + 30000) return false;
@@ -838,7 +886,29 @@
   const origSave = secRp.saveBtn.onclick;
   secRp.saveBtn.onclick = () => { origSave(); scheduleRp(true); };
   paint();
-  setInterval(readTick, 1000);
+  setInterval(tick, 1000);
+  // 别的标签页改了配置、当天记录或红包记录时跟着更新内存里的副本，
+  // 不然这边下一次保存会用旧副本把对方刚写的内容盖掉（storage 事件只在其它标签页触发）。
+  window.addEventListener('storage', (e) => {
+    if (e.key === CFG_KEY) {
+      const c = loadCfg();
+      const rpChanged = c.rp.on !== cfg.rp.on || c.rp.interval !== cfg.rp.interval;
+      Object.assign(cfg.read, c.read);
+      Object.assign(cfg.rp, c.rp);
+      if (rpChanged) scheduleRp(false);
+    } else if (e.key === DAY_KEY) {
+      day = loadDay();
+    } else if (e.key === SEEN_KEY) {
+      Object.assign(seen, ls.get(SEEN_KEY, {}));
+    } else if (e.key === TOPICS_KEY) {
+      Object.assign(rpTopics, ls.get(TOPICS_KEY, {}));
+    } else if (e.key === DONE_KEY) {
+      Object.assign(puzzleDone, ls.get(DONE_KEY, {}));
+    } else {
+      return;
+    }
+    paint();
+  });
   scheduleRp(false);
   subscribeBus();
 })();

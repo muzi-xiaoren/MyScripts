@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PT 签到 · BitPorn
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      1.0.0
+// @version      1.0.1
 // @description  打开 BitPorn 时自动领取当月「Daily Reward」日历里今天的奖励（事件 id 按月自动 +1），领完回到 /trending；已领则什么都不做。
 // @author       muzi-xiaoren
 // @match        https://bitporn.eu/trending*
@@ -83,7 +83,8 @@
       if (RETURN_TO) location.href = RETURN_TO;
       return;
     }
-    // 提交领取表单（FormData 自带 _token），成功后标记 + 回 trending；失败则不标记、回 trending，下次再试。
+    // 提交领取表单（FormData 自带 _token），成功后标记 + 回 trending；失败则不标记、停在事件页
+    // （回 trending 会被立刻再带回来重试，形成死循环），下次打开 trending 时再试。
     const action = claimForm.getAttribute('action');
     const fd = new FormData(claimForm);
     tryFetch(action, { method: 'POST', body: fd })
@@ -92,7 +93,7 @@
         if (RETURN_TO) location.href = RETURN_TO;
       })
       .catch(function () {
-        if (RETURN_TO) location.href = RETURN_TO;
+        /* 重试后仍失败：不标记、不跳，留在事件页可手动点 Claim */
       });
     return;
   }

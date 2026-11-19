@@ -2,6 +2,8 @@ English · [中文](README.md)
 
 # PT Helper · tangpt
 
+> **Archived**: this script is no longer maintained and is kept for reference only.
+
 A daily-routine helper for [www.tangpt.top](https://www.tangpt.top/). **One toggle per step** — turning a step off makes the chain skip straight to the next one:
 
 ```js
@@ -65,7 +67,7 @@ The `–` in the title bar shrinks the panel into a small ball; click the ball t
 
 ## Install
 
-Install [Tampermonkey](https://www.tampermonkey.net/) first, then [click here to install the script](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-tangpt-helper/pt-tangpt-helper.user.js).
+Install [Tampermonkey](https://www.tampermonkey.net/) first, then [click here to install the script](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/archive/pt-tangpt-helper/pt-tangpt-helper.user.js).
 
 ## Config
 

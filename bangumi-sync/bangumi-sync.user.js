@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         番组同步 BangumiSync — Bangumi 收藏上传到 GitHub
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      1.0.1
+// @version      1.0.2
 // @description  在 Bangumi 右下角 dock 加入「GitHub 同步」，把动画、书籍、音乐、游戏、三次元的全部收藏按我的评分排名，上传为带时间戳的 JSON 和 Markdown。
 // @author       muzi-xiaoren
 // @match        https://bangumi.tv/*
@@ -137,7 +137,7 @@
         headers: { ...headers, ...(body ? { 'Content-Type': 'application/json' } : {}) },
         data: body ? JSON.stringify(body) : undefined,
         anonymous: true,
-        timeout: 30000,
+        timeout: 60000,
         onload(response) {
           let json = null;
           try { json = JSON.parse(response.responseText); } catch { /* 非 JSON 响应只看状态码 */ }
@@ -207,7 +207,7 @@
   }
 
   function markdownText(value) {
-    return String(value ?? '').replace(/[\\|[\]]/g, '\\$&').replace(/\s+/g, ' ').trim();
+    return String(value ?? '').replace(/[\\|[\]<>*_`]/g, '\\$&').replace(/\s+/g, ' ').trim();
   }
 
   function buildFiles(type, username, entries, exportedAt) {
@@ -261,8 +261,16 @@
   }
 
   function githubError(response) {
-    const reason = { 401: 'Token 无效或已过期', 403: 'Token 没有写入权限', 404: '找不到仓库或分支，或 Token 无权访问', 409: '仓库为空或正在被修改，请稍后重试', 422: '分支或路径无效' }[response.status];
+    const reason = { 401: 'Token 无效或已过期', 403: 'Token 没有写入权限', 404: '找不到仓库或分支，或 Token 无权访问', 409: '仓库为空或正在被修改，请稍后重试', 422: '分支或路径无效，或分支在上传期间被修改' }[response.status];
     return new Error(`GitHub 返回 ${response.status}：${reason || response.json?.message || '请求失败'}`);
+  }
+
+  // 读数据前先确认 Token、仓库和分支可用：配置写错时立刻报错，不用等全部数据读完才发现。
+  async function checkRepository({ token, owner, repo, branch }) {
+    const headers = { Accept: 'application/vnd.github+json', Authorization: `Bearer ${token}`, 'X-GitHub-Api-Version': '2022-11-28' };
+    const path = branch ? `/git/ref/heads/${encodeURIComponent(branch)}` : '';
+    const response = await request('GET', `https://api.github.com/repos/${owner}/${repo}${path}`, headers);
+    if (response.status !== 200) throw githubError(response);
   }
 
   // 多个文件合成一次提交：读取分支最新提交，在其目录树上追加文件后移动分支指针。
@@ -297,6 +305,8 @@
     uploading = true;
     uploadButton.disabled = true;
     try {
+      status.textContent = '正在连接 GitHub…';
+      await checkRepository({ token: config.token, ...repository, branch: config.branch });
       const username = await resolveUsername(config);
       const stamp = uploadStamp();
       const exportedAt = new Date().toISOString();

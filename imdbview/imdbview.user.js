@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         映幕 IMDbView — IMDb Top250 清爽海报墙
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      1.2.0
+// @version      1.2.1
 // @description  IMDb Top250 海报墙：隐藏广告、紧凑布局，保留原生评分、已看和片单操作，海报大小与间距可调，可将看过的电影和评分上传到 GitHub。
 // @author       muzi-xiaoren
 // @match        https://www.imdb.com/chart/top*
@@ -338,7 +338,6 @@
       font-size: 14px;
       font-weight: 500;
     }
-    .imdbview ${MAIN} .iv-chinese-title::before { content: " · "; color: var(--iv-soft); }
     .imdbview ${MAIN} .cli-title-metadata { color: var(--iv-soft); font-size: 12px; }
     .imdbview ${MAIN} .cli-ratings-container { flex-wrap: wrap; gap: 6px; margin: 0; }
     .imdbview ${MAIN} .ipc-rating-star--voteCount { font-size: 12px; }
@@ -566,7 +565,6 @@
       // 不重复写入文本，否则页面观察器会被设置面板自身的更新持续触发。
       if (output.value !== text) output.value = text;
     });
-    requestAnimationFrame(syncCardActions);
   }
 
   function createSettings(host) {
@@ -585,11 +583,13 @@
       if (!(input.name in DEFAULTS)) return;
       settings[input.name] = Number(input.value);
       applySettings();
+      requestAnimationFrame(syncCardActions);
     });
     menu.addEventListener('change', () => GM_setValue(STORAGE_KEY, { ...settings }));
     menu.querySelector('button').addEventListener('click', () => {
       Object.assign(settings, DEFAULTS);
       applySettings();
+      requestAnimationFrame(syncCardActions);
       GM_setValue(STORAGE_KEY, { ...settings });
     });
     menu.addEventListener('toggle', positionSettings);
@@ -714,13 +714,14 @@
   }
 
   function markdownText(value) {
-    return String(value ?? '').replace(/[\\|[\]]/g, '\\$&').replace(/\s+/g, ' ').trim();
+    return String(value ?? '').replace(/[\\|[\]<>*_`]/g, '\\$&').replace(/\s+/g, ' ').trim();
   }
 
   async function imdbGraphql(query, variables) {
     const response = await fetch('https://api.graphql.imdb.com/', {
       method: 'POST',
       credentials: 'include',
+      signal: AbortSignal.timeout(30000),
       headers: { 'Content-Type': 'application/json', 'x-imdb-client-name': 'imdb-web-next' },
       body: JSON.stringify({ query, variables }),
     });
@@ -930,6 +931,7 @@
   }
 
   function scheduleHideChartInfo() {
+    if (!document.body.classList.contains('iv-info-open')) return;
     clearTimeout(infoCloseTimer);
     // 留出穿过入口与面板间隙的时间，让分享和外观设置能够正常操作。
     infoCloseTimer = setTimeout(() => {
@@ -1105,6 +1107,8 @@
       const name = cachedChineseTitle(id);
       const existing = heading.querySelector('.iv-chinese-title');
       if (name === undefined) {
+        // 排序 / 筛选后 React 可能复用这个标题节点：上一部影片的中文名不能留在新影片下面。
+        if (existing && existing.dataset.imdbId !== id) existing.remove();
         if (!requestedTitles.has(id)) pendingTitles.add(id);
         return;
       }

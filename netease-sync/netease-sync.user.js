@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         云音同步 NeteaseSync — 网易云歌单上传到 GitHub
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      1.1.0
+// @version      1.1.1
 // @description  在网易云音乐顶部导航加入「GitHub 同步」，把自建歌单的全部歌曲、收藏歌单的名称与简介、听歌排行、本人动态、自建与订阅的播客和播客收听记录，上传到 GitHub 带时间戳的目录。
 // @author       muzi-xiaoren
 // @match        https://music.163.com/*
@@ -120,7 +120,11 @@
 
   const artists = song => (song.ar || song.artists || []).map(artist => artist.name).filter(Boolean);
   const albumName = song => (song.al || song.album)?.name || null;
-  const formatDuration = ms => (ms ? `${Math.floor(ms / 60000)}:${String(Math.round(ms / 1000) % 60).padStart(2, '0')}` : null);
+  const formatDuration = ms => {
+    if (!ms) return null;
+    const seconds = Math.round(ms / 1000);
+    return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+  };
   const localDate = time => {
     if (!time) return null;
     const date = new Date(time);
@@ -169,7 +173,7 @@
   }
 
   function markdownText(value) {
-    return String(value ?? '').replace(/[\\|[\]]/g, '\\$&').replace(/\s+/g, ' ').trim();
+    return String(value ?? '').replace(/[\\|[\]<>*_`]/g, '\\$&').replace(/\s+/g, ' ').trim();
   }
 
   function songTitle(song) {
@@ -429,8 +433,16 @@
   }
 
   function githubError(response) {
-    const reason = { 401: 'Token 无效或已过期', 403: 'Token 没有写入权限', 404: '找不到仓库或分支，或 Token 无权访问', 409: '仓库为空或正在被修改，请稍后重试', 422: '分支或路径无效' }[response.status];
+    const reason = { 401: 'Token 无效或已过期', 403: 'Token 没有写入权限', 404: '找不到仓库或分支，或 Token 无权访问', 409: '仓库为空或正在被修改，请稍后重试', 422: '分支或路径无效，或分支在上传期间被修改' }[response.status];
     return new Error(`GitHub 返回 ${response.status}：${reason || response.json?.message || '请求失败'}`);
+  }
+
+  // 读数据前先确认 Token、仓库和分支可用：配置写错时立刻报错，不用等全部数据读完才发现。
+  async function checkRepository({ token, owner, repo, branch }) {
+    const headers = { Accept: 'application/vnd.github+json', Authorization: `Bearer ${token}`, 'X-GitHub-Api-Version': '2022-11-28' };
+    const path = branch ? `/git/ref/heads/${encodeURIComponent(branch)}` : '';
+    const response = await request('GET', `https://api.github.com/repos/${owner}/${repo}${path}`, headers);
+    if (response.status !== 200) throw githubError(response);
   }
 
   // 多个文件合成一次提交：读取分支最新提交，在其目录树上追加文件后移动分支指针。
@@ -465,6 +477,8 @@
     uploading = true;
     uploadButton.disabled = true;
     try {
+      status.textContent = '正在连接 GitHub…';
+      await checkRepository({ token: config.token, ...repository, branch: config.branch });
       status.textContent = '正在读取账号…';
       const profile = (await neteaseApi('/api/nuser/account/get')).profile;
       if (!profile?.userId) throw new Error('请先登录网易云音乐');

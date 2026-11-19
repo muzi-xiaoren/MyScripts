@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GitHub Repo Visibility Badge Colors
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      1.0.0
+// @version      1.0.1
 // @description  Color repository visibility badges on GitHub: Public = green, Private = blue (outline pill, like the native "Public archive" badge).
 // @author       muzi-xiaoren
 // @match        https://github.com/*
@@ -55,7 +55,8 @@
     clearTimeout(window.__mzxVisT);
     window.__mzxVisT = setTimeout(paint, 150);
   });
-  obs.observe(document.body, { childList: true, subtree: true });
+  // 挂在 <html> 上：Turbo 整页导航会换掉 <body>，挂在 body 上的观察器会跟着失效
+  obs.observe(document.documentElement, { childList: true, subtree: true });
 
   ['turbo:load', 'pjax:end'].forEach(ev => document.addEventListener(ev, paint));
 })();

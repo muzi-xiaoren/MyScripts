@@ -2,7 +2,7 @@
 
 A clean green poster gallery for Douban Movie Top 250.
 
-Current version: `1.1.5`.
+Current version: `1.2.1`.
 
 - Preserves titles, alternate titles, ranks, ratings, vote counts and quotes.
 - Displays complete posters. Titles use up to two lines, original titles are kept in Details, no empty title line is reserved, and a compact metadata row shows the year and up to two genres.
@@ -14,6 +14,8 @@ Current version: `1.1.5`.
 - Preserves availability labels, the unwatched filter, search and pagination.
 - The page-size selector after the total count below pagination offers 25, 50, 100 or 250 items (default 25) and remembers the choice. Changing it returns to the first page; filter parameters are retained and pagination is regrouped.
 - Larger pages load native pages sequentially with progress. Failures retain partial results and offer Retry; short final pages show only available movies.
+- When logged in, a five-star "My rating" control sits on the lower-left poster corner; clicking it rates the movie and marks an unwatched one as watched. It submits Douban's own collection form: the existing comment, tags and private setting are read first, only the stars are replaced, and the broadcast option is left unchecked.
+- GitHub sync: after expanding the header, enter a GitHub token, the repository, and optionally a branch and file path (default `movies/douban`). Uploading reads every Watched record of the account and ranks them by your rating (5 stars), ties sharing a rank and unrated movies last. Each upload creates a new timestamped pair such as `movies/douban-2026-10-10-203015.json` and `.md`; old files are not overwritten.
 - Adjustable target poster width (160–360px) and card gap (8–40px), saved in userscript storage. Defaults: 240px and 22px.
 
 The header is collapsed by default, with no persistent chart title. Hover or focus the top-center area to reveal the native unwatched filter and its original count; click its text directly to toggle it. The adjacent arrow expands or collapses search and navigation, saving the choice. Touch devices show the entry directly. Column count adapts to the available width.
@@ -28,7 +30,7 @@ In Chrome, enable Allow User Scripts on Tampermonkey's extension details page.
 
 The [install link](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/douview/douview.user.js) supports installation and update checks.
 
-Only Top 250 and its pagination/filter query parameters are affected. Native movie links and collection actions remain controlled by Douban. Disabling the script and reloading restores the original page. Hiding ads does not block their network requests.
+Only Top 250 and its pagination/filter query parameters are affected. Native movie links and Douban's own collection buttons are left as they are; the only request the script sends on your behalf is the rating form described above. Disabling the script and reloading restores the original page. Hiding ads does not block their network requests.
 
 Version 1.1.5 passed JavaScript syntax checking and isolated headless Chrome checks at 320px, 390px, 768px and 1280px: no horizontal overflow, unclipped search buttons, unobstructed navigation overlays within the viewport, hover visibility and native filter clicks, header collapse and expansion, settings overlay boundaries, Escape dismissal, settings writes and reset, expanded full information, retained native nodes/listeners and dynamic multi-action updates. No runtime errors occurred. The fixture models Douban markup with placeholder posters and mocked GM storage. Live checks in the in-app browser and Edge could not complete because browser control reads timed out; real-site CSS compatibility, Tampermonkey reload/pagination persistence and actual collection submissions remain unverified.
 
@@ -38,6 +40,10 @@ Typography scaling was verified in the isolated fixture at target poster widths 
 
 Isolated pagination tests passed for all 250 movies, 50-item pages, a 50-item final page with size 100, filtered totals of 73 and 20, and partial-result recovery after a failed request. No duplicate movies appeared and appended cards were decorated. Live Douban batch loading and account actions on appended cards remain unverified.
 
+## My ratings and GitHub sync
+
+Poster stars come from a cache of the Watched list, refreshed in the background when missing or older than 7 days and on every upload. The list is read 30 items per page, 0.8 seconds apart; if Douban asks for verification, reading stops with a message and the script does not handle the CAPTCHA. The token is stored in plain text in userscript storage, so use a fine-grained token limited to the target repository with Contents read/write. Upload requests go only to `api.github.com` and carry no Douban cookies.
+
 ## License
 
-[MIT](../LICENSE)
+[MIT](../LICENSE) · [中文](./README.md)

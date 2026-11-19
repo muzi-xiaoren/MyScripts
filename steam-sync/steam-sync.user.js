@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         蒸汽同步 SteamSync — Steam 年度回顾与游玩时长上传到 GitHub
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      1.0.1
+// @version      1.0.2
 // @description  在 Steam 商店顶部导航加入「年度回顾」和「GitHub 同步」，把每年的 Steam 年度回顾（含每个游戏的小时数）和全部游戏的累计时长上传到 GitHub，并合并多个账号生成总表。
 // @author       muzi-xiaoren
 // @match        https://store.steampowered.com/*
@@ -133,7 +133,7 @@
   const storeUrl = appid => `https://store.steampowered.com/app/${appid}/`;
 
   function markdownText(value) {
-    return String(value ?? '').replace(/[\\|[\]]/g, '\\$&').replace(/\s+/g, ' ').trim();
+    return String(value ?? '').replace(/[\\|[\]<>*_`]/g, '\\$&').replace(/\s+/g, ' ').trim();
   }
 
   const gameLink = game => `[${markdownText(game.name || `App ${game.appid}`)}](${storeUrl(game.appid)})`;
@@ -439,11 +439,15 @@
         return JSON.parse(new TextDecoder().decode(bytes));
       },
       async commit(files, message) {
+        // 读取数据要几分钟，期间分支可能已有别的提交（其它同步脚本、手动 push）。
+        // 提交前重读分支头并以它为父提交，否则更新分支会因非 fast-forward 被拒，整次白跑。
+        const head = await call('GET', `/git/ref/heads/${encodeURIComponent(target)}`);
+        const base = head.object.sha === ref.object.sha ? parent : await call('GET', `/git/commits/${head.object.sha}`);
         const next = await call('POST', '/git/trees', {
-          base_tree: parent.tree.sha,
+          base_tree: base.tree.sha,
           tree: files.map(file => ({ path: file.path, mode: '100644', type: 'blob', content: file.content })),
         }, [201]);
-        const commit = await call('POST', '/git/commits', { message, tree: next.sha, parents: [ref.object.sha] }, [201]);
+        const commit = await call('POST', '/git/commits', { message, tree: next.sha, parents: [head.object.sha] }, [201]);
         await call('PATCH', `/git/refs/heads/${encodeURIComponent(target)}`, { sha: commit.sha });
       },
     };

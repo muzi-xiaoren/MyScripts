@@ -47,7 +47,7 @@
 
   // NexusPHP 签到入口有多种写法，统一探测（取到「未签入口」就签，取不到=已签/无入口 → 什么都不做）：
   //   ① AJAX 变体（PTerClub）：<a id="do-attendance" data-url="attendance-ajax.php">。
-  //   ② 经典 faqlink 变体（Mua/KamePT/NicePT/GGPT/CarPT/Dubhe/HDFans/PTSKit）：<a class="faqlink" href="attendance.php">；已签后 faqlink class 被清空，靠结构判断。
+  //   ② 经典 faqlink 变体（KamePT/NicePT/GGPT/CarPT/Dubhe/HDFans/PTSKit）：<a class="faqlink" href="attendance.php">；已签后 faqlink class 被清空，靠结构判断。
   //   ③ 带 type 参数变体（PTtime）：<a href="attendance.php?type=sign&uid=..">；已签变 type=list，靠 type=sign 判断。
   //   ④ BTSchool 每日签到插件：<a href="index.php?action=addbonus">每日签到</a>；已签后该链接消失。
   //   ⑤ not-attended 图标变体（CSPT/财神）：<a class="not-attended" href="attendance.php">；已签后 class 变 attended，靠 not-attended 判断。

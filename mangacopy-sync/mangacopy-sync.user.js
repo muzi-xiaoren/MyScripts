@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         拷贝漫画同步 MangaCopySync — 书架收藏上传到 GitHub
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      1.0.0
+// @version      1.0.1
 // @description  在拷贝漫画个人中心加入「GitHub 同步」，把书架上收藏的全部漫画（作者、连载状态、最新话、看到第几话）上传到 GitHub。
 // @author       muzi-xiaoren
 // @match        https://www.mangacopy.com/*
@@ -133,6 +133,8 @@
       uploading = true;
       uploadButton.disabled = true;
       try {
+        status.textContent = '正在连接 GitHub…';
+        await checkRepository({ token: config.token, ...repository, branch: config.branch });
         const comics = await collectShelf(offset => { status.textContent = `正在读取书架（已读 ${offset} 部）…`; });
         if (!comics.length) { status.textContent = '书架上没有收藏的漫画。'; return; }
         const stamp = uploadStamp();
@@ -273,8 +275,16 @@
   }
 
   function githubError(response) {
-    const reason = { 401: 'Token 无效或已过期', 403: 'Token 没有写入权限', 404: '找不到仓库或分支，或 Token 无权访问', 409: '仓库为空或正在被修改，请稍后重试', 422: '分支或路径无效' }[response.status];
+    const reason = { 401: 'Token 无效或已过期', 403: 'Token 没有写入权限', 404: '找不到仓库或分支，或 Token 无权访问', 409: '仓库为空或正在被修改，请稍后重试', 422: '分支或路径无效，或分支在上传期间被修改' }[response.status];
     return new Error(`GitHub 返回 ${response.status}：${reason || response.json?.message || '请求失败'}`);
+  }
+
+  // 读数据前先确认 Token、仓库和分支可用：配置写错时立刻报错，不用等全部数据读完才发现。
+  async function checkRepository({ token, owner, repo, branch }) {
+    const headers = { Accept: 'application/vnd.github+json', Authorization: `Bearer ${token}`, 'X-GitHub-Api-Version': '2022-11-28' };
+    const path = branch ? `/git/ref/heads/${encodeURIComponent(branch)}` : '';
+    const response = await request('GET', `https://api.github.com/repos/${owner}/${repo}${path}`, headers);
+    if (response.status !== 200) throw githubError(response);
   }
 
   // 多个文件合成一次提交：读取分支最新提交，在其目录树上追加文件后移动分支指针。

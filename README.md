@@ -10,33 +10,40 @@
 
 | 脚本 | 版⁠本 | 说明 | 安⁠装 |
 |---|---|---|---|
-| [imdbview](./imdbview) | 1.2.0 | IMDb Top250 清爽海报墙：顶部折叠、清晰观看进度、稳定分享浮层、完整片名、海报评分叠层、字号随海报缩放、中文片名，保留原生评分和观影状态，大小和间距可调；可将看过的电影按我的评分排名上传到 GitHub | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/imdbview/imdbview.user.js) |
-| [douview](./douview) | 1.2.0 | 豆瓣 Top250 清爽海报墙：海报评分叠层、海报上直接打分、原站一句话短评、紧凑电影信息、字号随海报宽度调整、悬停未看筛选、搜索与账号菜单；保留原生观影操作，海报大小和间距可调，每页 25/50/100/250 条；可将看过的电影按我的评分排名上传到 GitHub | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/douview/douview.user.js) |
-| [bangumi-sync](./bangumi-sync) | 1.0.1 | Bangumi 右下角 dock 加入「GitHub 同步」：动画、书籍、音乐、游戏、三次元的全部收藏状态按我的评分排名，每次上传新建带时间戳的 JSON 和 Markdown，一次提交写入；可选 Bangumi Token 读取仅自己可见的收藏 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/bangumi-sync/bangumi-sync.user.js) |
-| [netease-sync](./netease-sync) | 1.1.0 | 网易云音乐顶部导航加入「GitHub 同步」：自建歌单的全部歌曲（保持原顺序）、收藏歌单的名称与简介、听歌排行（所有时间 / 最近一周）、本人动态、自建播客的全部节目、订阅播客和播客收听记录，每次上传新建带时间戳的目录，一次提交写入 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/netease-sync/netease-sync.user.js) |
-| [steam-sync](./steam-sync) | 1.0.1 | Steam 商店顶部导航加入「年度回顾」跳转和「GitHub 同步」：上传每年的 Steam 年度回顾（每个游戏的精确小时数、每月时长、标签）和全部玩过游戏的累计时长（含以前家庭共享借玩的），往年只补缺失年份；每次上传合并多个账号生成游戏总表 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/steam-sync/steam-sync.user.js) |
-| [bilibili-sync](./bilibili-sync) | 1.1.0 | B 站页面左下角加入「GitHub 同步」：自己的投稿视频（含字幕、B 站识别的 BGM 和 AI 总结）、动态全文、全部自建收藏夹、关注列表，每次上传新建带时间戳的目录，一次提交写入；视频画面和动态图片的文字描述从仓库的 `descriptions.json` 读取 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/bilibili-sync/bilibili-sync.user.js) |
-| [mangacopy-sync](./mangacopy-sync) | 1.0.0 | 拷贝漫画个人中心右下角加入「GitHub 同步」：书架上收藏的全部漫画（作者、连载状态、最新话、看到第几话），自动还原接口返回的乱码进度，每次上传新建带时间戳的 JSON 和 Markdown，一次提交写入 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/mangacopy-sync/mangacopy-sync.user.js) |
+| [imdbview](./imdbview) | 1.2.1 | IMDb Top250 清爽海报墙：顶部折叠、清晰观看进度、稳定分享浮层、完整片名、海报评分叠层、字号随海报缩放、中文片名，保留原生评分和观影状态，大小和间距可调；可将看过的电影按我的评分排名上传到 GitHub | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/imdbview/imdbview.user.js) |
+| [douview](./douview) | 1.2.1 | 豆瓣 Top250 清爽海报墙：海报评分叠层、海报上直接打分、原站一句话短评、紧凑电影信息、字号随海报宽度调整、悬停未看筛选、搜索与账号菜单；保留原生观影操作，海报大小和间距可调，每页 25/50/100/250 条；可将看过的电影按我的评分排名上传到 GitHub | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/douview/douview.user.js) |
+| [bangumi-sync](./bangumi-sync) | 1.0.2 | Bangumi 右下角 dock 加入「GitHub 同步」：动画、书籍、音乐、游戏、三次元的全部收藏状态按我的评分排名，每次上传新建带时间戳的 JSON 和 Markdown，一次提交写入；可选 Bangumi Token 读取仅自己可见的收藏 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/bangumi-sync/bangumi-sync.user.js) |
+| [netease-sync](./netease-sync) | 1.1.1 | 网易云音乐顶部导航加入「GitHub 同步」：自建歌单的全部歌曲（保持原顺序）、收藏歌单的名称与简介、听歌排行（所有时间 / 最近一周）、本人动态、自建播客的全部节目、订阅播客和播客收听记录，每次上传新建带时间戳的目录，一次提交写入 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/netease-sync/netease-sync.user.js) |
+| [steam-sync](./steam-sync) | 1.0.2 | Steam 商店顶部导航加入「年度回顾」跳转和「GitHub 同步」：上传每年的 Steam 年度回顾（每个游戏的精确小时数、每月时长、标签）和全部玩过游戏的累计时长（含以前家庭共享借玩的），往年只补缺失年份；每次上传合并多个账号生成游戏总表 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/steam-sync/steam-sync.user.js) |
+| [bilibili-sync](./bilibili-sync) | 1.1.1 | B 站页面左下角加入「GitHub 同步」：自己的投稿视频（含字幕、B 站识别的 BGM 和 AI 总结）、动态全文、全部自建收藏夹、关注列表，每次上传新建带时间戳的目录，一次提交写入；视频画面和动态图片的文字描述从仓库的 `descriptions.json` 读取 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/bilibili-sync/bilibili-sync.user.js) |
+| [mangacopy-sync](./mangacopy-sync) | 1.0.1 | 拷贝漫画个人中心右下角加入「GitHub 同步」：书架上收藏的全部漫画（作者、连载状态、最新话、看到第几话），自动还原接口返回的乱码进度，每次上传新建带时间戳的 JSON 和 Markdown，一次提交写入 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/mangacopy-sync/mangacopy-sync.user.js) |
 | [github-pr-tab](./github-pr-tab) | 3.11.2 | GitHub PR/Issue 页面：浏览器标签只显示 `#编号`，并按状态给图标(favicon)上色（已 approve 橙、stacked 非主干 base 灰、冲突红等） | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/github-pr-tab/github-pr-tab.user.js) |
-| [github-repo-visibility-color](./github-repo-visibility-color) | 1.0.0 | GitHub 个人主页/仓库列表：`Public` 徽章变绿、`Private` 变蓝（描边样式，与原生 “Public archive” 一致） | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/github-repo-visibility-color/github-repo-visibility-color.user.js) |
-| [linuxdo-helper](./linuxdo-helper) | 1.4.1 | LINUX DO 侧边悬浮框，两个独立开关：刷帖（从 `/top` 等列表页从上到下逐个打开帖子，每屏等小蓝点消失再滚）、领红包（站点一推送新帖就立刻扫积分乐园，另有定时兜底，识别直链 / base64 / o→0 / 中文数字等变形后自动领取 credit 红包，解谜类列出来留给你）；列表地址在悬浮框里改 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/linuxdo-helper/linuxdo-helper.user.js) |
-| [pt-checkin-pterclub](./pt-checkin-pterclub) | 1.2.0 | PTerClub：打开页面时自动检测并完成每日签到，未签到则签到后回到种子页并刷新，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-pterclub/pt-checkin-pterclub.user.js) |
-| [pt-checkin-mua](./pt-checkin-mua) | 2.0.1 | mua：打开页面时自动检测并完成每日签到，未签到则去签到页过 Cloudflare 安全验证后签到并回到 `special.php`，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-mua/pt-checkin-mua.user.js) |
-| [pt-checkin-kamept](./pt-checkin-kamept) | 1.1.0 | KamePT：打开页面时自动检测并完成每日签到，未签到则签到后回到 `torrents.php?tag_id=10` 并刷新，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-kamept/pt-checkin-kamept.user.js) |
-| [pt-checkin-qingwapt](./pt-checkin-qingwapt) | 1.1.0 | QingwaPT(青蛙)：打开主页时领每日福利 + （可选）群聊发言 + 签到，已签到则不动；群聊开关可一键关闭 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-qingwapt/pt-checkin-qingwapt.user.js) |
-| [pt-checkin-nicept](./pt-checkin-nicept) | 1.0.0 | NicePT：打开页面时自动检测并完成每日签到，未签到则签到后回到 `torrents.php` 并刷新，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-nicept/pt-checkin-nicept.user.js) |
-| [pt-checkin-pttime](./pt-checkin-pttime) | 1.0.0 | PTtime：打开页面时自动检测并完成每日签到，未签到则签到后回到指定成种页并刷新，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-pttime/pt-checkin-pttime.user.js) |
-| [pt-checkin-gamegamept](./pt-checkin-gamegamept) | 1.0.0 | GGPT(GameGamePT)：打开页面时自动检测并完成每日签到，未签到则签到后原地刷新，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-gamegamept/pt-checkin-gamegamept.user.js) |
-| [pt-checkin-carpt](./pt-checkin-carpt) | 1.0.0 | CarPT：打开页面时自动检测并完成每日签到，未签到则签到后回到 `torrents.php` 并刷新，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-carpt/pt-checkin-carpt.user.js) |
-| [pt-checkin-btschool](./pt-checkin-btschool) | 1.0.0 | BTSchool(比特校园)：打开页面时自动完成每日签到（BTSchool 的 `index.php?action=addbonus` 插件），未签到则签到后回到 `torrents.php` 并刷新，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-btschool/pt-checkin-btschool.user.js) |
+| [github-repo-visibility-color](./github-repo-visibility-color) | 1.0.1 | GitHub 个人主页/仓库列表：`Public` 徽章变绿、`Private` 变蓝（描边样式，与原生 “Public archive” 一致） | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/github-repo-visibility-color/github-repo-visibility-color.user.js) |
+| [linuxdo-helper](./linuxdo-helper) | 1.4.2 | LINUX DO 侧边悬浮框，两个独立开关：刷帖（从 `/top` 等列表页从上到下逐个打开帖子，每屏等小蓝点消失再滚）、领红包（站点一推送新帖就立刻扫积分乐园，另有定时兜底，识别直链 / base64 / o→0 / 中文数字等变形后自动领取 credit 红包，解谜类列出来留给你）；列表地址在悬浮框里改 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/linuxdo-helper/linuxdo-helper.user.js) |
+| [pt-checkin-pterclub](./pt-checkin-pterclub) | 1.2.1 | PTerClub：打开页面时自动检测并完成每日签到，未签到则签到后回到种子页并刷新，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-pterclub/pt-checkin-pterclub.user.js) |
+| [pt-checkin-mua](./pt-checkin-mua) | 2.0.2 | mua：打开页面时自动检测并完成每日签到，未签到则去签到页过 Cloudflare 安全验证后签到并回到 `special.php`，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-mua/pt-checkin-mua.user.js) |
+| [pt-checkin-kamept](./pt-checkin-kamept) | 1.1.1 | KamePT：打开页面时自动检测并完成每日签到，未签到则签到后回到 `torrents.php?tag_id=10` 并刷新，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-kamept/pt-checkin-kamept.user.js) |
+| [pt-checkin-qingwapt](./pt-checkin-qingwapt) | 1.1.1 | QingwaPT(青蛙)：打开主页时领每日福利 + （可选）群聊发言 + 签到，已签到则不动；群聊开关可一键关闭 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-qingwapt/pt-checkin-qingwapt.user.js) |
+| [pt-checkin-nicept](./pt-checkin-nicept) | 1.0.1 | NicePT：打开页面时自动检测并完成每日签到，未签到则签到后回到 `torrents.php` 并刷新，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-nicept/pt-checkin-nicept.user.js) |
+| [pt-checkin-pttime](./pt-checkin-pttime) | 1.0.1 | PTtime：打开页面时自动检测并完成每日签到，未签到则签到后回到指定成种页并刷新，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-pttime/pt-checkin-pttime.user.js) |
+| [pt-checkin-gamegamept](./pt-checkin-gamegamept) | 1.0.1 | GGPT(GameGamePT)：打开页面时自动检测并完成每日签到，未签到则签到后原地刷新，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-gamegamept/pt-checkin-gamegamept.user.js) |
+| [pt-checkin-carpt](./pt-checkin-carpt) | 1.0.1 | CarPT：打开页面时自动检测并完成每日签到，未签到则签到后回到 `torrents.php` 并刷新，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-carpt/pt-checkin-carpt.user.js) |
+| [pt-checkin-btschool](./pt-checkin-btschool) | 1.0.1 | BTSchool(比特校园)：打开页面时自动完成每日签到（BTSchool 的 `index.php?action=addbonus` 插件），未签到则签到后回到 `torrents.php` 并刷新，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-btschool/pt-checkin-btschool.user.js) |
 | [pt-checkin-rousi](./pt-checkin-rousi) | 1.0.0 | Rousi(自研 React 站)：打开页面时模拟点击签到按钮，未签到则签到后回到指定列表页并刷新，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-rousi/pt-checkin-rousi.user.js) |
 | [pt-checkin-dubhe](./pt-checkin-dubhe) | 1.0.0 | Dubhe(天枢)：打开页面时自动检测并完成每日签到，未签到则签到后回到 `torrents.php?tag_id=3` 并刷新，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-dubhe/pt-checkin-dubhe.user.js) |
 | [pt-checkin-cspt](./pt-checkin-cspt) | 1.0.0 | CSPT(财神)：打开页面时自动检测并完成每日签到（`not-attended` 图标变体），未签到则签到后回到 `torrents.php` 并刷新，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-cspt/pt-checkin-cspt.user.js) |
 | [pt-checkin-hdfans](./pt-checkin-hdfans) | 1.0.0 | HDFans：打开页面时自动检测并完成每日签到，未签到则签到后回到 `torrents.php` 并刷新，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-hdfans/pt-checkin-hdfans.user.js) |
-| [pt-checkin-vclib](./pt-checkin-vclib) | 2.0.0 | VC-Lib：打开页面时自动检测并完成每日签到，未签到则去签到页过 Cloudflare 安全验证后签到并回到原来的页面，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-vclib/pt-checkin-vclib.user.js) |
+| [pt-checkin-vclib](./pt-checkin-vclib) | 2.0.1 | VC-Lib：打开页面时自动检测并完成每日签到，未签到则去签到页过 Cloudflare 安全验证后签到并回到原来的页面，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-vclib/pt-checkin-vclib.user.js) |
 | [pt-checkin-ptskit](./pt-checkin-ptskit) | 1.0.0 | PTSKit(拾刻)：打开页面时自动检测并完成每日签到，未签到则签到后回到 `torrents.php?tag_id=238` 并刷新，已签到则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-ptskit/pt-checkin-ptskit.user.js) |
-| [pt-checkin-bitporn](./pt-checkin-bitporn) | 1.0.0 | BitPorn(UNIT3D)：打开页面时自动领取当月「Daily Reward」日历里今天的奖励（事件 id 按月自动 +1），领完回到 `/trending`，已领则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-bitporn/pt-checkin-bitporn.user.js) |
-| [pt-tangpt-helper](./pt-tangpt-helper) | 1.2.0 | 不可躺(tangpt) 每日流程助手，每步一个独立开关：收件箱清理、一百连抽 × 10 轮、领取任务、签到、老虎机、回主页，并在每次打开主页时自动领红包；抽奖 / 老虎机 / 红包结果记在侧边悬浮框，按天持久化 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-tangpt-helper/pt-tangpt-helper.user.js) |
+| [pt-checkin-bitporn](./pt-checkin-bitporn) | 1.0.1 | BitPorn(UNIT3D)：打开页面时自动领取当月「Daily Reward」日历里今天的奖励（事件 id 按月自动 +1），领完回到 `/trending`，已领则不动 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-checkin-bitporn/pt-checkin-bitporn.user.js) |
+
+## 已归档
+
+不再维护，仅留存代码；脚本不会再更新。
+
+| 脚本 | 版⁠本 | 说明 | 安⁠装 |
+|---|---|---|---|
+| [pt-tangpt-helper](./archive/pt-tangpt-helper) | 1.2.1 | 不可躺(tangpt) 每日流程助手，每步一个独立开关：收件箱清理、一百连抽 × 10 轮、领取任务、签到、老虎机、回主页，并在每次打开主页时自动领红包；抽奖 / 老虎机 / 红包结果记在侧边悬浮框，按天持久化 | [安装](https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/archive/pt-tangpt-helper/pt-tangpt-helper.user.js) |
 
 ## 如何安装脚本
 

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PT 助手 · 不可躺
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      1.2.0
+// @version      1.2.1
 // @description  www.tangpt.top 每日流程助手，每一步一个独立开关：① 收件箱清理 ② 一百连抽 × 10 轮 + 结果累计 ③ 领取任务(月末领 VIP，平时领苍蝇腿) ④ 签到得魔力 ⑤ 老虎机开转两次 ⑥ 回主页；另外每次打开主页都自动领取红包。抽奖、老虎机、红包结果记在侧边悬浮框里，按天持久化。
 // @author       muzi-xiaoren
 // @match        https://www.tangpt.top/
@@ -15,8 +15,8 @@
 // @grant        none
 // @homepageURL  https://github.com/muzi-xiaoren/MyScripts
 // @supportURL   https://github.com/muzi-xiaoren/MyScripts/issues
-// @downloadURL  https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-tangpt-helper/pt-tangpt-helper.user.js
-// @updateURL    https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/pt-tangpt-helper/pt-tangpt-helper.user.js
+// @downloadURL  https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/archive/pt-tangpt-helper/pt-tangpt-helper.user.js
+// @updateURL    https://raw.githubusercontent.com/muzi-xiaoren/MyScripts/main/archive/pt-tangpt-helper/pt-tangpt-helper.user.js
 // @license      MIT
 // ==/UserScript==
 
@@ -545,7 +545,8 @@
       // 早先版本把 exam_id 平铺在外层、也没要 JSON —— 服务端不认，返回值又是一段字符串，
       // 读不出 ret，所以每天都显示「已提交领取」，其实一次也没领上。
       const res = await window.jQuery.post('ajax.php',
-        { action: 'claimTask', params: { exam_id: inp.getAttribute('data-id') } }, null, 'json');
+        { action: 'claimTask', params: { exam_id: inp.getAttribute('data-id') } }, null, 'json')
+        .catch((xhr) => { throw new Error('领取请求失败：HTTP ' + ((xhr && xhr.status) || '?')); });
       const msg = res && res.msg ? String(res.msg).replace(/<[^>]*>/g, '').trim() : '';
       // 被拒不抛错：资格不够之类的原因重试也没用，抛错只会把后面的签到、老虎机一起卡住。
       // 结果写进悬浮框常驻的【任务】一栏，跳到别的页面也看得到。

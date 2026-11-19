@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PT 签到 · VC-Lib
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      2.0.0
+// @version      2.0.1
 // @description  打开 pt.vclib.online 时自动检测签到状态：未签到就去签到页，等站点的 Cloudflare Turnstile 安全验证放行后提交签到，再回到你原来所在的页面；已签到则什么都不做。
 // @author       muzi-xiaoren
 // @match        https://pt.vclib.online/*
@@ -29,6 +29,9 @@
   const ATTENDANCE_PATH = '/attendance.php';
   const DONE_KEY = 'mzx-pter-attendance';
   const TRY_KEY = 'mzx-pter-attendance-tries';
+  // 被带去签到页的次数单独计：令牌一直不来（Cloudflare 要人工点）时不会走到提交，
+  // 只数提交的话每打开一个页面都会被带回签到页。
+  const HOP_KEY = 'mzx-pter-attendance-hops';
   const FROM_KEY = 'mzx-pter-attendance-from';
   const today = new Date().toLocaleDateString('en-CA');
 
@@ -39,16 +42,17 @@
   function markDone() {
     localStorage.setItem(DONE_KEY, today);
     localStorage.removeItem(TRY_KEY);
+    localStorage.removeItem(HOP_KEY);
   }
 
-  function tries() {
-    const raw = localStorage.getItem(TRY_KEY) || '';
+  function tries(key = TRY_KEY) {
+    const raw = localStorage.getItem(key) || '';
     const [day, n] = raw.split('|');
     return day === today ? Number(n) || 0 : 0;
   }
 
-  function bumpTries() {
-    localStorage.setItem(TRY_KEY, today + '|' + (tries() + 1));
+  function bumpTries(key = TRY_KEY) {
+    localStorage.setItem(key, today + '|' + (tries(key) + 1));
   }
 
   // 回哪儿：RETURN_TO 优先，否则回到来签到之前的那页。两个都没有（你自己直接打开的签到页）
@@ -97,7 +101,8 @@
   // 站点换成 Turnstile 后那条路断了：Turnstile 的令牌只能由签到页上的组件当场发。
   if (!pending) return;
   if (localStorage.getItem(DONE_KEY) === today) return;
-  if (tries() >= MAX_TRIES) return;
+  if (tries() >= MAX_TRIES || tries(HOP_KEY) >= MAX_TRIES) return;
+  bumpTries(HOP_KEY);
   sessionStorage.setItem(FROM_KEY, location.href.replace(/#.*$/, ''));
   location.href = location.origin + ATTENDANCE_PATH;
 })();

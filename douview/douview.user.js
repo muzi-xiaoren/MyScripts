@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         豆影 DouView — 豆瓣 Top250 清爽海报墙
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      1.2.0
+// @version      1.2.1
 // @description  将豆瓣电影 Top250 改为清爽海报墙，隐藏广告，保留原生观影操作，可在海报上直接打分，可调整海报大小和卡片间距，可将看过的电影和评分上传到 GitHub。
 // @author       muzi-xiaoren
 // @match        https://movie.douban.com/top250*
@@ -154,15 +154,6 @@
     .douview .mobile-app-entrance,
     .douview [id^="dale_movie_top250"],
     .douview #db-global-nav .top-nav-doubanapp { display: none !important; }
-    .douview-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
-    .douview #content h1 {
-      color: var(--dv-green);
-      font-size: 13px;
-      letter-spacing: 2px;
-      font-weight: 500;
-      padding: 0;
-      margin: 0;
-    }
     .douview-intro { margin: 24px 0 12px; color: var(--dv-soft); font-size: 12px; }
     .douview-intro strong { font-weight: 500; }
     .douview-intro p { display: inline; margin-left: 8px; }
@@ -338,7 +329,6 @@
       .douview #db-nav-movie .nav-search .inp { width: calc(100% - 46px); }
       .douview #db-nav-movie .nav-search fieldset { width: 100%; }
       #douview-navigation { margin-left: auto; }
-      .douview #content h1 { font-size: 12px; letter-spacing: 0; }
       .douview .grid_view .info { padding: 12px; }
       .douview .paginator a, .douview .paginator .thispage { padding: 6px 9px; }
     }
@@ -812,12 +802,17 @@
     poster.append(widget);
   }
 
+  // 本次页面里刚打的分：「看过」列表要读十几秒，读完整体替换缓存时把这些分补回去，
+  // 否则读取期间打的分（所在页已读过）会从海报上消失。
+  const recentRatings = {};
+
   async function submitRating(widget, id, stars) {
     if (widget.getAttribute('aria-busy') === 'true') return;
     widget.setAttribute('aria-busy', 'true');
     try {
       await rateSubject(id, stars);
       myRatings.ratings[id] = stars;
+      recentRatings[id] = stars;
       GM_setValue(RATINGS_KEY, myRatings);
       list.querySelectorAll(`.douview-my-rating[data-subject="${id}"]`).forEach(element => renderStars(element, id));
     } catch (error) {
@@ -830,7 +825,7 @@
   // 沿用原站收藏弹窗的表单：先读取现有短评、标签和可见性，只替换星级，避免覆盖已有内容。
   async function rateSubject(id, stars) {
     const headers = { 'X-Requested-With': 'XMLHttpRequest' };
-    const formResponse = await fetch(`/j/subject/${id}/interest?interest=collect`, { credentials: 'same-origin', headers });
+    const formResponse = await fetch(`/j/subject/${id}/interest?interest=collect`, { credentials: 'same-origin', headers, signal: AbortSignal.timeout(15000) });
     const formData = await formResponse.json().catch(() => null);
     if (formResponse.status === 403) throw new Error('请先登录豆瓣');
     const form = formData?.html && new DOMParser().parseFromString(formData.html, 'text/html').querySelector('form');
@@ -853,6 +848,7 @@
     const response = await fetch(action.href, {
       method: 'POST',
       credentials: 'same-origin',
+      signal: AbortSignal.timeout(15000),
       headers: { ...headers, 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
       body,
     });
@@ -861,7 +857,7 @@
   }
 
   async function doubanUserId() {
-    const response = await fetch('/mine', { credentials: 'same-origin' });
+    const response = await fetch('/mine', { credentials: 'same-origin', signal: AbortSignal.timeout(15000) });
     const page = response.ok ? new DOMParser().parseFromString(await response.text(), 'text/html') : null;
     const link = page?.querySelector('a[href*="/people/"][href$="/collect"]')?.getAttribute('href');
     const id = (response.url + ' ' + (link || '')).match(/\/people\/([^/?#\s]+)/)?.[1];
@@ -901,6 +897,8 @@
           url: `https://movie.douban.com/subject/${id}/`,
         });
       });
+      // 第一页就一条都没有、总数又不是 0：页面结构变了或拿到的是提示页。报错，别用空结果清掉评分缓存、上传空文件。
+      if (!items.length && start === 0 && total !== 0) throw new Error('没有读到「看过」列表，页面结构可能已变化');
       // 下架条目会被隐藏，单页可能不足 30 条，偏移量仍按固定页长前进。
       if (!items.length || (movies.size === before && !Number.isFinite(total))) break;
       start += 30;
@@ -908,6 +906,7 @@
     }
     const ratings = {};
     movies.forEach(movie => { if (movie.myRating) ratings[movie.id] = movie.myRating; });
+    Object.assign(ratings, recentRatings);
     Object.assign(myRatings, { updatedAt: Date.now(), ratings });
     GM_setValue(RATINGS_KEY, myRatings);
     list.querySelectorAll('.douview-my-rating').forEach(widget => renderStars(widget, widget.dataset.subject));
@@ -981,7 +980,7 @@
   }
 
   function markdownText(value) {
-    return String(value ?? '').replace(/[\\|[\]]/g, '\\$&').replace(/\s+/g, ' ').trim();
+    return String(value ?? '').replace(/[\\|[\]<>*_`]/g, '\\$&').replace(/\s+/g, ' ').trim();
   }
 
   function buildDoubanFiles(movies) {
@@ -1109,13 +1108,12 @@
       const fullMetadata = metadata.textContent.replace(/\s+/g, ' ').trim();
       const parts = fullMetadata.split(/\s*\/\s*/);
       const year = parts[0]?.match(/\b\d{4}\b/)?.[0];
-      const genres = parts.length >= 3 ? parts.slice(2).join(' / ').trim().split(/\s+/).slice(0, 2).join(' · ') : '';
+      const genres = parts.length >= 3 ? parts.at(-1).trim().split(/\s+/).slice(0, 2).join(' · ') : '';
       metadata.title = fullMetadata;
       metadata.textContent = year && genres ? `${year} · ${genres}` : fullMetadata;
       const credits = document.createElement('details');
       credits.className = 'douview-credits';
       const summary = document.createElement('summary');
-      summary.textContent = '影片信息';
       description.before(metadata, credits);
       const fullInfo = document.createElement('div');
       fullInfo.className = 'douview-full-info';

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PT 签到 · QingwaPT
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      1.1.0
+// @version      1.1.1
 // @description  打开青蛙(QingwaPT)主页时自动完成每日任务：先①领每日福利(1蝌蚪换1000蝌蚪)+②(可选)群聊发言，最后③签到，然后回到主页。已签到则什么都不做。
 // @author       muzi-xiaoren
 // @match        https://www.qingwapt.com/
@@ -86,8 +86,10 @@
 
     await Promise.allSettled(first);
 
-    // ① 最后签到（GET attendance.php；幂等）
-    await tryFetch(checkinLink.getAttribute('href') || '/attendance.php').catch(() => {});
+    // ① 最后签到（GET attendance.php；幂等）。签到失败就停在原地：此时仍是未签到状态，
+    //    再刷新只会让脚本重跑一遍、无限循环；留给下次打开主页时重试。
+    const signed = await tryFetch(checkinLink.getAttribute('href') || '/attendance.php').then(() => true, () => false);
+    if (!signed) return;
 
     // 回到 RETURN_TO（已在该页就原地刷新）；此时已签到，重载后顶部 guard 命中，不再重复。
     const here = location.href.replace(/#.*$/, '');

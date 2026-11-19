@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PT 签到 · Mua
 // @namespace    https://github.com/muzi-xiaoren/MyScripts
-// @version      2.0.1
+// @version      2.0.2
 // @description  打开 mua.xloli.cc 时自动检测签到状态：未签到就去签到页完成签到并回到指定页面，已签到则什么都不做（自己打开签到页也不会被带走）。适配站点新增的 Cloudflare Turnstile 安全验证。
 // @author       muzi-xiaoren
 // @match        https://mua.xloli.cc/*
@@ -29,6 +29,9 @@
   const ATTENDANCE_PATH = '/attendance.php';
   const DONE_KEY = 'mzx-pter-attendance';
   const TRY_KEY = 'mzx-pter-attendance-tries';
+  // 被带去签到页的次数单独计：令牌一直不来（Cloudflare 要人工点）时不会走到提交，
+  // 只数提交的话每打开一个页面都会被带回签到页。
+  const HOP_KEY = 'mzx-pter-attendance-hops';
   // 脚本自己提交签到表单前记一下，回显页据此判断「这次是脚本签的」才跳回 RETURN_TO。
   // 用 sessionStorage：只在这个标签页里有效，不会影响你另开的签到页。
   const SUBMIT_KEY = 'mzx-pter-attendance-submitted';
@@ -41,16 +44,17 @@
   function markDone() {
     localStorage.setItem(DONE_KEY, today);
     localStorage.removeItem(TRY_KEY);
+    localStorage.removeItem(HOP_KEY);
   }
 
-  function tries() {
-    const raw = localStorage.getItem(TRY_KEY) || '';
+  function tries(key = TRY_KEY) {
+    const raw = localStorage.getItem(key) || '';
     const [day, n] = raw.split('|');
     return day === today ? Number(n) || 0 : 0;
   }
 
-  function bumpTries() {
-    localStorage.setItem(TRY_KEY, today + '|' + (tries() + 1));
+  function bumpTries(key = TRY_KEY) {
+    localStorage.setItem(key, today + '|' + (tries(key) + 1));
   }
 
   function leave() {
@@ -101,6 +105,7 @@
   // 那样只会拿回一张验证页面，签到不会生效）。签到页跑完会自动回到 RETURN_TO。
   if (!pending) return;
   if (localStorage.getItem(DONE_KEY) === today) return;
-  if (tries() >= MAX_TRIES) return;
-  location.href = 'https://mua.xloli.cc' + ATTENDANCE_PATH;
+  if (tries() >= MAX_TRIES || tries(HOP_KEY) >= MAX_TRIES) return;
+  bumpTries(HOP_KEY);
+  location.href = location.origin + ATTENDANCE_PATH;
 })();
